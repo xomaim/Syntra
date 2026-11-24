@@ -827,6 +827,35 @@ class MainForm : Form
         }
     }
 
+    sealed class PromiseTile : Control
+    {
+        readonly string title, desc;
+        public PromiseTile(string t, string d)
+        {
+            title = t; desc = d;
+            Size = new Size(272, 88); Margin = new Padding(0, 6, 12, 6);
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Theme.Card);
+            using (var path = Gfx.Round(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 12))
+            {
+                using var b = new SolidBrush(Theme.Mix(Theme.Card, Theme.Hover, 0.45));
+                using var p = new Pen(Theme.Border);
+                g.FillPath(b, path); g.DrawPath(p, path);
+            }
+            // shield badge with a tick
+            using (var ab = new SolidBrush(Theme.Accent)) g.FillEllipse(ab, 14, 16, 30, 30);
+            using (var tp = new Pen(Theme.AccentText, 2.4f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round })
+                g.DrawLines(tp, new[] { new PointF(22, 31), new PointF(27, 36), new PointF(36, 26) });
+            TextRenderer.DrawText(g, title, Theme.H2, new Point(56, 16), Theme.Text);
+            TextRenderer.DrawText(g, desc, Theme.Body, new Rectangle(56, 40, Width - 66, Height - 44), Theme.Muted, TextFormatFlags.WordBreak);
+        }
+    }
+
     // ---------- Settings ----------
     Control BuildSettings()
     {
@@ -865,16 +894,17 @@ class MainForm : Form
         }));
         page.Controls.Add(a);
 
-        var promise = Ui.Card("What Syntra never does", null);
-        foreach (var line in new[]
+        var promise = Ui.Card("Safe by design", "Syntra only changes what your monitor shows. It never touches your games.");
+        foreach (var (t, d) in new[]
         {
-            "✓  It never reads a game's memory.",
-            "✓  It never changes a game's files.",
-            "✓  It never puts code into a game, or into any other program.",
-            "✓  It installs no driver.",
-            "✓  It runs as your own Windows user and needs no admin rights. One repair button can restart it as admin — Windows asks you first.",
+            ("No memory reading", "Never reads a game's memory."),
+            ("No file changes", "Never changes a game's files."),
+            ("No injection", "Never puts code into a game or any other program."),
+            ("No drivers", "Installs no driver. Nothing runs at kernel level."),
+            ("No admin needed", "Runs as you. Repair asks Windows first."),
+            ("Verified builds", "Every version is built by GitHub. Check it below."),
         })
-            promise.Controls.Add(Ui.Lbl(line, Theme.Body, Theme.Text, Ui.PageW - 40));
+            promise.Controls.Add(new PromiseTile(t, d));
         page.Controls.Add(promise);
 
         var verify = Ui.Card("Verify this copy", "SHA-256 of the Syntra.exe now running. Compare it with the one on the GitHub release.");
