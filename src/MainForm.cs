@@ -9,11 +9,18 @@ class MainForm : Form
     readonly Panel content = new() { Dock = DockStyle.Fill, BackColor = Theme.Bg };
     readonly FlowLayoutPanel side = new()
     {
-        Dock = DockStyle.Left, Width = 120, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-        BackColor = Theme.Side, Padding = new Padding(6, 10, 6, 6),
+        Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+        BackColor = Theme.Side, Padding = new Padding(0, 0, 0, 0),
     };
+    readonly Panel sideHost = new() { Dock = DockStyle.Left, Width = 64, BackColor = Theme.Side };
+    readonly FlowLayoutPanel sideBottom = new()
+    {
+        Dock = DockStyle.Bottom, Height = 132, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+        BackColor = Theme.Side, Padding = new Padding(0, 0, 0, 10),
+    };
+    readonly ToolTip tips = new() { InitialDelay = 250 };
     readonly Dictionary<string, Func<Control>> pages = new();
-    readonly Dictionary<string, Button> navButtons = new();
+    readonly Dictionary<string, NavIcon> navButtons = new();
     readonly NotifyIcon tray = new();
     readonly System.Windows.Forms.Timer watch = new() { Interval = 1000 };
     readonly System.Windows.Forms.Timer saveDebounce = new() { Interval = 600 };
@@ -33,24 +40,25 @@ class MainForm : Form
         Font = Theme.Body;
         StartPosition = FormStartPosition.CenterScreen;
         Icon = MakeIcon();
+        Ui.DarkTitle(this);
 
         Controls.Add(content);
-        Controls.Add(side);
+        sideHost.Controls.Add(side);
+        sideHost.Controls.Add(sideBottom);
+        sideHost.Paint += (_, e) => { using var pen = new Pen(Theme.Border); e.Graphics.DrawLine(pen, sideHost.Width - 1, 0, sideHost.Width - 1, sideHost.Height); };
+        Controls.Add(sideHost);
 
-        var brand = Ui.Lbl("✷ Syntra", Theme.H2);
-        brand.Margin = new Padding(6, 4, 4, 16);
-        side.Controls.Add(brand);
-
-        AddPage("Display", BuildDisplay);
-        AddPage("Library", BuildLibrary);
-        AddPage("Resolution", BuildResolution);
-        AddPage("Monitor", BuildMonitor);
-        AddPage("Crosshair", BuildCrosshair);
-        AddPage("Profiles", BuildProfiles);
-        AddPage("Settings", BuildSettings);
-        var ver = Ui.Lbl("v" + Application.ProductVersion.Split('+')[0], Theme.Body, Theme.Muted);
-        ver.Margin = new Padding(8, 20, 4, 4);
-        side.Controls.Add(ver);
+        side.Controls.Add(new LogoTile());
+        AddPage("Display", IconKind.Display, BuildDisplay);
+        AddPage("Resolution", IconKind.Resolution, BuildResolution);
+        AddPage("Monitor", IconKind.Monitor, BuildMonitor);
+        AddPage("Crosshair", IconKind.Crosshair, BuildCrosshair);
+        AddPage("Profiles", IconKind.Profiles, BuildProfiles);
+        AddPage("Settings", IconKind.Settings, BuildSettings, bottom: true);
+        var exit = new NavIcon(IconKind.Exit);
+        tips.SetToolTip(exit, "Exit (puts your screen back)");
+        exit.Click += (_, _) => Program.ExitApp();
+        sideBottom.Controls.Add(exit);
 
         saveDebounce.Tick += (_, _) => { saveDebounce.Stop(); S.Save(); };
 
@@ -75,25 +83,20 @@ class MainForm : Form
     }
 
     // ---------- plumbing ----------
-    void AddPage(string name, Func<Control> build)
+    void AddPage(string name, IconKind icon, Func<Control> build, bool bottom = false)
     {
         pages[name] = build;
-        var b = new Button
-        {
-            Text = name, FlatStyle = FlatStyle.Flat, Width = 106, Height = 40, TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = Theme.Text, BackColor = Theme.Side, Font = Theme.Body, Cursor = Cursors.Hand, Margin = new Padding(0, 2, 0, 2),
-        };
-        b.FlatAppearance.BorderSize = 0;
-        b.FlatAppearance.MouseOverBackColor = Theme.Card;
+        var b = new NavIcon(icon);
+        tips.SetToolTip(b, name);
         b.Click += (_, _) => Show(name);
         navButtons[name] = b;
-        side.Controls.Add(b);
+        (bottom ? sideBottom : side).Controls.Add(b);
     }
 
     void Show(string name)
     {
         currentPage = name;
-        foreach (var (n, b) in navButtons) b.BackColor = n == name ? Theme.Card : Theme.Side;
+        foreach (var (n, b) in navButtons) b.Selected = n == name;
         content.SuspendLayout();
         foreach (Control c in content.Controls) c.Dispose();
         content.Controls.Clear();
@@ -275,45 +278,6 @@ class MainForm : Form
         to.Highlights = from.Highlights; to.Shadows = from.Shadows; to.Blacks = from.Blacks; to.Whites = from.Whites;
     }
 
-    // ---------- Library ----------
-    Control BuildLibrary()
-    {
-        var page = Ui.Page();
-        page.Controls.Add(Ui.Header("Library", "Ready-made looks. Share yours as a small .json file.",
-            Ui.Btn("Import look…", ImportLook), Ui.Btn("Export current…", ExportLook)));
-        var grid = new FlowLayoutPanel { AutoSize = true, MaximumSize = new Size(Ui.PageW + 12, 0), BackColor = Theme.Bg, Margin = new Padding(0) };
-        foreach (var l in Look.BuiltIn().Concat(S.Saved))
-        {
-            var c = Ui.Card(l.Name, l.Note, 282);
-            c.Margin = new Padding(0, 0, 12, 12);
-            c.Controls.Add(Ui.Lbl($"Saturation {l.Saturation:0}% · Vibrance {l.Vibrance:0} · Temp {l.Temperature:0}", Theme.Body, Theme.Muted, 250));
-            var look = l;
-            c.Controls.Add(Ui.Btn("Apply", () => { CopyInto(look, ActiveLook); Changed(); Show("Display"); }, true));
-            grid.Controls.Add(c);
-        }
-        page.Controls.Add(grid);
-        return page;
-    }
-
-    void ImportLook()
-    {
-        using var d = new OpenFileDialog { Filter = "Syntra look (*.json)|*.json" };
-        if (d.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            var l = AppSettings.FromJson<Look>(File.ReadAllText(d.FileName)) ?? throw new Exception();
-            l.Saturation = Math.Clamp(l.Saturation, 0, 300); l.Vibrance = Math.Clamp(l.Vibrance, 0, 100);
-            S.Saved.RemoveAll(x => x.Name == l.Name); S.Saved.Add(l); S.Save(); Show("Library");
-        }
-        catch { MessageBox.Show(this, "That file isn't a Syntra look.", "Syntra"); }
-    }
-
-    void ExportLook()
-    {
-        using var d = new SaveFileDialog { Filter = "Syntra look (*.json)|*.json", FileName = "my-look.json" };
-        if (d.ShowDialog(this) == DialogResult.OK) File.WriteAllText(d.FileName, AppSettings.ToJson(ActiveLook));
-    }
-
     // ---------- Resolution ----------
     Control BuildResolution()
     {
@@ -395,6 +359,7 @@ class MainForm : Form
             FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, TopMost = true,
             BackColor = Theme.Card, ForeColor = Theme.Text, Font = Theme.Body,
         };
+        Ui.DarkTitle(f);
         var lbl = new Label { Text = $"Going back in {left} s.", Location = new Point(20, 20), AutoSize = true };
         var keep = new Button { Text = "Keep", DialogResult = DialogResult.OK, Location = new Point(170, 80), Size = new Size(85, 32), FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.Black };
         var back = new Button { Text = "Go back", DialogResult = DialogResult.Cancel, Location = new Point(265, 80), Size = new Size(85, 32), FlatStyle = FlatStyle.Flat };
@@ -466,7 +431,7 @@ class MainForm : Form
         card.Controls.Add(Ui.Toggle("Centre dot", c.CenterDot, v => { c.CenterDot = v; overlay?.Invalidate(); S.Save(); }));
         var style = Ui.Combo(new[] { "Cross", "T", "Dot", "Circle" }, 160);
         style.SelectedItem = c.Style;
-        style.SelectedIndexChanged += (_, _) => { c.Style = (string)style.SelectedItem!; overlay?.Invalidate(); S.Save(); };
+        style.SelectedChanged += () => { c.Style = (string)style.SelectedItem!; overlay?.Invalidate(); S.Save(); };
         card.Controls.Add(style);
         void Sl(string t, int min, int max, int val, int def, Action<int> set)
         {
@@ -509,7 +474,8 @@ class MainForm : Form
         var pick = Ui.Card("Pick a game", "Running programs with a window. Syntra only looks at the program's name.");
         var procs = Process.GetProcesses()
             .Where(p => { try { return p.MainWindowHandle != IntPtr.Zero && p.Id != Environment.ProcessId; } catch { return false; } })
-            .Select(p => p.ProcessName).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n).ToList();
+            .Select(p => p.ProcessName).Where(n => !Hidden.Contains(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
         var combo = Ui.Combo(procs, 300);
         pick.Controls.Add(combo);
         pick.Controls.Add(Ui.Btn("Save current look for this game", () =>
@@ -534,6 +500,12 @@ class MainForm : Form
         page.Controls.Add(saved);
         return page;
     }
+
+    static readonly HashSet<string> Hidden = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ApplicationFrameHost", "TextInputHost", "explorer", "SystemSettings", "ShellExperienceHost", "StartMenuExperienceHost",
+        "SearchHost", "LockApp", "XboxPcApp", "GameBar", "Widgets", "dwm", "taskmgr", "Syntra",
+    };
 
     // ---------- Settings ----------
     Control BuildSettings()
@@ -581,6 +553,7 @@ class MainForm : Form
             Text = title, Size = new Size(360, 160), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false, BackColor = Theme.Card, ForeColor = Theme.Text, Font = Theme.Body,
         };
+        Ui.DarkTitle(f);
         var l = new Label { Text = text, Location = new Point(14, 14), AutoSize = true };
         var tb = new TextBox { Text = def, Location = new Point(14, 40), Width = 315, BackColor = Theme.Bg, ForeColor = Theme.Text };
         var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, Location = new Point(244, 76), Size = new Size(85, 30), FlatStyle = FlatStyle.Flat };

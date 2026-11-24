@@ -2,10 +2,11 @@ namespace Syntra;
 
 static class Theme
 {
-    public static readonly Color Bg = Color.FromArgb(18, 18, 18);
-    public static readonly Color Side = Color.FromArgb(14, 14, 14);
-    public static readonly Color Card = Color.FromArgb(30, 30, 30);
-    public static readonly Color Border = Color.FromArgb(55, 55, 55);
+    public static readonly Color Bg = Color.FromArgb(0, 0, 0);
+    public static readonly Color Side = Color.FromArgb(6, 6, 7);
+    public static readonly Color Card = Color.FromArgb(13, 13, 14);
+    public static readonly Color Hover = Color.FromArgb(26, 26, 28);
+    public static readonly Color Border = Color.FromArgb(36, 36, 38);
     public static readonly Color Text = Color.FromArgb(240, 240, 240);
     public static readonly Color Muted = Color.FromArgb(150, 150, 150);
     public static readonly Color Good = Color.FromArgb(90, 200, 120);
@@ -143,7 +144,14 @@ static class Ui
             MinimumSize = new Size(width, 0), MaximumSize = new Size(width, 0),
             BackColor = Theme.Card, Padding = new Padding(14, 12, 14, 12), Margin = new Padding(0, 0, 0, 12),
         };
-        p.Paint += (_, e) => { using var pen = new Pen(Theme.Border); e.Graphics.DrawRectangle(pen, 0, 0, p.Width - 1, p.Height - 1); };
+        p.Resize += (_, _) => { using var path = Gfx.Round(new Rectangle(0, 0, p.Width, p.Height), 12); p.Region = new Region(path); };
+        p.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var pen = new Pen(Theme.Border);
+            using var path = Gfx.Round(new Rectangle(0, 0, p.Width - 1, p.Height - 1), 12);
+            e.Graphics.DrawPath(pen, path);
+        };
         if (title != null) p.Controls.Add(Lbl(title, Theme.H2, width: width - 40));
         if (sub != null) p.Controls.Add(Lbl(sub, Theme.Body, Theme.Muted, width - 40));
         return p;
@@ -165,15 +173,27 @@ static class Ui
         return card;
     }
 
-    public static ComboBox Combo(IEnumerable<string> items, int width = 260)
+    public static DarkDropdown Combo(IEnumerable<string> items, int width = 260)
     {
-        var c = new ComboBox
+        var d = new DarkDropdown { Width = width };
+        d.Items.AddRange(items);
+        return d;
+    }
+
+    public static void DarkTitle(Form f)
+    {
+        f.HandleCreated += (_, _) =>
         {
-            DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, Width = width,
-            BackColor = Theme.Bg, ForeColor = Theme.Text, Font = Theme.Body, Margin = new Padding(4, 6, 4, 6),
+            try
+            {
+                int on = 1, black = 0x000000, white = 0xFFFFFF;
+                Gfx.DwmSetWindowAttribute(f.Handle, 20, ref on, 4);    // dark mode title bar
+                Gfx.DwmSetWindowAttribute(f.Handle, 35, ref black, 4); // caption colour (Windows 11)
+                Gfx.DwmSetWindowAttribute(f.Handle, 34, ref black, 4); // border colour
+                Gfx.DwmSetWindowAttribute(f.Handle, 36, ref white, 4); // caption text
+            }
+            catch { }
         };
-        c.Items.AddRange(items.Cast<object>().ToArray());
-        return c;
     }
 }
 
@@ -260,4 +280,295 @@ class CrosshairOverlay : Form
     }
 
     protected override void Dispose(bool disposing) { if (disposing) keepOnTop.Dispose(); base.Dispose(disposing); }
+}
+
+static class Gfx
+{
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    public static System.Drawing.Drawing2D.GraphicsPath Round(RectangleF r, float rad)
+    {
+        var p = new System.Drawing.Drawing2D.GraphicsPath();
+        float d = rad * 2;
+        p.AddArc(r.X, r.Y, d, d, 180, 90);
+        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+        p.CloseFigure();
+        return p;
+    }
+}
+
+// Clean dark dropdown that replaces the old Windows combo box.
+class DarkDropdown : Control
+{
+    public readonly List<string> Items = new();
+    int index = -1;
+    bool hover;
+    public string Placeholder = "Choose…";
+    public event Action? SelectedChanged;
+
+    public DarkDropdown()
+    {
+        Size = new Size(260, 38);
+        Margin = new Padding(4, 6, 8, 6);
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.SupportsTransparentBackColor | ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.ResizeRedraw, true);
+        BackColor = Theme.Card;
+        Cursor = Cursors.Hand;
+        Font = Theme.Body;
+    }
+
+    public int SelectedIndex
+    {
+        get => index;
+        set { index = value; Invalidate(); }
+    }
+
+    public string? SelectedItem
+    {
+        get => index >= 0 && index < Items.Count ? Items[index] : null;
+        set { index = value == null ? -1 : Items.IndexOf(value); Invalidate(); }
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var path = Gfx.Round(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 9);
+        using var fill = new SolidBrush(hover ? Theme.Hover : Color.FromArgb(8, 8, 9));
+        using var pen = new Pen(hover ? Color.FromArgb(70, 70, 74) : Theme.Border);
+        g.FillPath(fill, path);
+        g.DrawPath(pen, path);
+        var text = SelectedItem ?? Placeholder;
+        TextRenderer.DrawText(g, text, Font, new Rectangle(12, 0, Width - 40, Height),
+            SelectedItem == null ? Theme.Muted : Theme.Text, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        using var cp = new Pen(Theme.Muted, 1.6f);
+        float cx = Width - 20, cy = Height / 2f;
+        g.DrawLines(cp, new[] { new PointF(cx - 5, cy - 2.5f), new PointF(cx, cy + 2.5f), new PointF(cx + 5, cy - 2.5f) });
+    }
+
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+        if (Items.Count == 0) return;
+        var pop = new DropPopup(this);
+        var pt = PointToScreen(new Point(0, Height + 4));
+        pop.Location = pt;
+        pop.Show(FindForm());
+    }
+
+    internal void Pick(int i) { index = i; Invalidate(); SelectedChanged?.Invoke(); }
+
+    sealed class DropPopup : Form
+    {
+        readonly DarkDropdown owner;
+        const int RowH = 34, MaxRows = 9;
+        int hoverRow = -1, scroll;
+
+        public DropPopup(DarkDropdown o)
+        {
+            owner = o;
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.Manual;
+            TopMost = true;
+            BackColor = Color.FromArgb(12, 12, 13);
+            Opacity = 0.96;
+            DoubleBuffered = true;
+            Font = o.Font;
+            int rows = Math.Min(MaxRows, o.Items.Count);
+            Size = new Size(o.Width, rows * RowH + 12);
+            using var path = Gfx.Round(new Rectangle(0, 0, Width, Height), 10);
+            Region = new Region(path);
+            if (o.index > MaxRows - 1) scroll = Math.Min(o.index - MaxRows / 2, o.Items.Count - MaxRows);
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get { var cp = base.CreateParams; cp.ClassStyle |= 0x20000; return cp; } // drop shadow
+        }
+
+        protected override void OnDeactivate(EventArgs e) { base.OnDeactivate(e); Close(); }
+        protected override void OnKeyDown(KeyEventArgs e) { if (e.KeyCode == Keys.Escape) Close(); base.OnKeyDown(e); }
+
+        int RowAt(int y) { int r = (y - 6) / RowH; return r >= 0 && r < Math.Min(MaxRows, owner.Items.Count) ? r + scroll : -1; }
+
+        protected override void OnMouseMove(MouseEventArgs e) { var r = RowAt(e.Y); if (r != hoverRow) { hoverRow = r; Invalidate(); } base.OnMouseMove(e); }
+        protected override void OnMouseLeave(EventArgs e) { hoverRow = -1; Invalidate(); base.OnMouseLeave(e); }
+        protected override void OnMouseClick(MouseEventArgs e) { var r = RowAt(e.Y); if (r >= 0) { owner.Pick(r); Close(); } base.OnMouseClick(e); }
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            int max = Math.Max(0, owner.Items.Count - MaxRows);
+            scroll = Math.Clamp(scroll - Math.Sign(e.Delta), 0, max);
+            hoverRow = RowAt(e.Y); Invalidate();
+            base.OnMouseWheel(e);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var pen = new Pen(Theme.Border))
+            using (var path = Gfx.Round(new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), 10))
+                g.DrawPath(pen, path);
+            int rows = Math.Min(MaxRows, owner.Items.Count);
+            for (int i = 0; i < rows; i++)
+            {
+                int idx = i + scroll;
+                var rect = new Rectangle(6, 6 + i * RowH, Width - 12, RowH);
+                bool sel = idx == owner.index, hov = idx == hoverRow;
+                if (sel || hov)
+                {
+                    using var b = new SolidBrush(sel ? Color.FromArgb(34, 34, 37) : Theme.Hover);
+                    using var rp = Gfx.Round(new RectangleF(rect.X, rect.Y + 1, rect.Width, rect.Height - 2), 7);
+                    g.FillPath(b, rp);
+                }
+                TextRenderer.DrawText(g, owner.Items[idx], Font, new Rectangle(rect.X + 10, rect.Y, rect.Width - 30, rect.Height),
+                    sel ? Color.White : Color.FromArgb(205, 205, 210), TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                if (sel)
+                {
+                    using var cp = new Pen(Color.White, 1.6f);
+                    float cx = rect.Right - 16, cy = rect.Y + rect.Height / 2f;
+                    g.DrawLines(cp, new[] { new PointF(cx - 5, cy), new PointF(cx - 1.5f, cy + 3.5f), new PointF(cx + 5, cy - 4) });
+                }
+            }
+            if (owner.Items.Count > MaxRows)
+            {
+                float track = Height - 16, thumb = track * MaxRows / owner.Items.Count;
+                float y = 8 + (track - thumb) * scroll / (owner.Items.Count - MaxRows);
+                using var sb = new SolidBrush(Color.FromArgb(60, 60, 64));
+                using var sp = Gfx.Round(new RectangleF(Width - 6, y, 3, thumb), 1.5f);
+                g.FillPath(sb, sp);
+            }
+        }
+    }
+}
+
+public enum IconKind { Display, Resolution, Monitor, Crosshair, Profiles, Settings, Exit }
+
+// Icon-only sidebar button. The selected one is a white rounded tile with a black icon.
+class NavIcon : Control
+{
+    public readonly IconKind Kind;
+    bool selected, hover;
+    public bool Selected { get => selected; set { selected = value; Invalidate(); } }
+
+    public NavIcon(IconKind kind)
+    {
+        Kind = kind;
+        Size = new Size(48, 48);
+        Margin = new Padding(8, 5, 8, 5);
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint, true);
+        BackColor = Theme.Side;
+        Cursor = Cursors.Hand;
+    }
+
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        if (selected || hover)
+        {
+            using var b = new SolidBrush(selected ? Color.White : Theme.Hover);
+            using var path = Gfx.Round(new RectangleF(0, 0, Width - 1, Height - 1), 12);
+            g.FillPath(b, path);
+        }
+        var col = selected ? Color.Black : hover ? Color.White : Color.FromArgb(190, 190, 195);
+        Draw(g, Kind, col, Width / 2f, Height / 2f);
+    }
+
+    public static void Draw(Graphics g, IconKind k, Color col, float cx, float cy)
+    {
+        using var p = new Pen(col, 1.8f) { StartCap = System.Drawing.Drawing2D.LineCap.Round, EndCap = System.Drawing.Drawing2D.LineCap.Round, LineJoin = System.Drawing.Drawing2D.LineJoin.Round };
+        using var b = new SolidBrush(col);
+        switch (k)
+        {
+            case IconKind.Display: // half-filled circle
+                g.DrawEllipse(p, cx - 8, cy - 8, 16, 16);
+                g.FillPie(b, cx - 8, cy - 8, 16, 16, 90, 180);
+                break;
+            case IconKind.Resolution: // screen with expand corners
+            {
+                using var r = Gfx.Round(new RectangleF(cx - 11, cy - 8, 22, 16), 3);
+                g.DrawPath(p, r);
+                g.DrawLines(p, new[] { new PointF(cx - 6, cy - 1), new PointF(cx - 6, cy - 4), new PointF(cx - 3, cy - 4) });
+                g.DrawLines(p, new[] { new PointF(cx + 6, cy + 1), new PointF(cx + 6, cy + 4), new PointF(cx + 3, cy + 4) });
+                break;
+            }
+            case IconKind.Monitor: // monitor on a stand
+            {
+                using var r = Gfx.Round(new RectangleF(cx - 11, cy - 9, 22, 15), 3);
+                g.DrawPath(p, r);
+                g.DrawLine(p, cx, cy + 6, cx, cy + 9);
+                g.DrawLine(p, cx - 5, cy + 9.5f, cx + 5, cy + 9.5f);
+                break;
+            }
+            case IconKind.Crosshair:
+                g.DrawEllipse(p, cx - 7.5f, cy - 7.5f, 15, 15);
+                g.DrawLine(p, cx, cy - 11, cx, cy - 4);
+                g.DrawLine(p, cx, cy + 4, cx, cy + 11);
+                g.DrawLine(p, cx - 11, cy, cx - 4, cy);
+                g.DrawLine(p, cx + 4, cy, cx + 11, cy);
+                g.FillEllipse(b, cx - 1.3f, cy - 1.3f, 2.6f, 2.6f);
+                break;
+            case IconKind.Profiles: // game controller
+            {
+                using var r = Gfx.Round(new RectangleF(cx - 11, cy - 6, 22, 12), 6);
+                g.DrawPath(p, r);
+                g.DrawLine(p, cx - 7, cy, cx - 3, cy);
+                g.DrawLine(p, cx - 5, cy - 2, cx - 5, cy + 2);
+                g.FillEllipse(b, cx + 3, cy - 2.2f, 2.6f, 2.6f);
+                g.FillEllipse(b, cx + 6, cy - 0.4f, 2.6f, 2.6f);
+                break;
+            }
+            case IconKind.Settings: // sun / gear
+                g.DrawEllipse(p, cx - 4, cy - 4, 8, 8);
+                for (int i = 0; i < 8; i++)
+                {
+                    double a = i * Math.PI / 4;
+                    g.DrawLine(p, cx + (float)Math.Cos(a) * 7, cy + (float)Math.Sin(a) * 7, cx + (float)Math.Cos(a) * 10, cy + (float)Math.Sin(a) * 10);
+                }
+                break;
+            case IconKind.Exit: // leave
+                g.DrawLines(p, new[] { new PointF(cx - 2, cy - 9), new PointF(cx - 9, cy - 9), new PointF(cx - 9, cy + 9), new PointF(cx - 2, cy + 9) });
+                g.DrawLine(p, cx - 3, cy, cx + 10, cy);
+                g.DrawLines(p, new[] { new PointF(cx + 6, cy - 4), new PointF(cx + 10, cy), new PointF(cx + 6, cy + 4) });
+                break;
+        }
+    }
+}
+
+// The logo tile at the top of the sidebar.
+class LogoTile : Control
+{
+    public LogoTile()
+    {
+        Size = new Size(40, 40);
+        Margin = new Padding(12, 14, 12, 18);
+        DoubleBuffered = true;
+        BackColor = Theme.Side;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        using var b = new SolidBrush(Color.White);
+        using var path = Gfx.Round(new RectangleF(0, 0, Width - 1, Height - 1), 10);
+        g.FillPath(b, path);
+        using var f = new Font("Segoe UI Black", 17f, FontStyle.Bold);
+        using var tb = new SolidBrush(Color.Black);
+        var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        g.DrawString("S", f, tb, new RectangleF(0, 1, Width, Height), sf);
+    }
 }

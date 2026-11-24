@@ -14,7 +14,6 @@ Windows SmartScreen may warn because the file isn't code-signed: click **More in
 | Page | What you get |
 |---|---|
 | **Display** | Saturation 0–300 %, vibrance (uses NVIDIA's own Digital Vibrance when present), brightness, contrast, gamma, temperature, highlights, shadows, blacks, whites, presets, save your own looks |
-| **Library** | Ready-made looks (Vivid, Forest, Snow, Rust PvP, Competitive…), import/export looks as `.json` |
 | **Resolution** | All modes your display supports, refresh rates, stretched 4:3 presets, custom mode. Every change reverts after 15 s unless you click Keep |
 | **Monitor** | Your monitor's real brightness/contrast over DDC/CI, low-blue-light |
 | **Crosshair** | Click-through overlay crosshair: cross / T / dot / circle, size, gap, thickness, colour, outline |
