@@ -224,7 +224,18 @@ class MainForm : Form
         content.Controls.Clear();
 
         // The page is made a little wider/taller than the window so its scrollbar sits out of sight.
-        var page = pages[name]();
+        Control page;
+        try { page = pages[name](); }
+        catch (Exception ex)
+        {
+            // Never leave a blank screen: show what went wrong and log it.
+            try { File.AppendAllText(Path.Combine(AppSettings.Dir, "crash.log"), $"[{DateTime.Now}] v{Updater.Current} page {name}\n{ex}\n\n"); } catch { }
+            var err = Ui.Page();
+            err.Controls.Add(Ui.Header(name, "This page hit a problem. Click the tab again — and send crash.log from %AppData%\\Syntra if it keeps happening."));
+            err.Controls.Add(Ui.Lbl(ex.Message, Theme.Body, Theme.Warn, Ui.PageW));
+            err.Controls.Add(Ui.Btn("Try again", () => Show(name), true));
+            page = err;
+        }
         page.Dock = DockStyle.None;
         page.Location = Point.Empty;
         currentControl = page;
@@ -633,10 +644,25 @@ class MainForm : Form
         hueOverlay.SetEffect(S.HueDegrees, S.HueSat / 100.0);
     }
 
-    static List<string> WindowApps() => Process.GetProcesses()
-        .Where(p => { try { return p.MainWindowHandle != IntPtr.Zero && p.Id != Environment.ProcessId; } catch { return false; } })
-        .Select(p => p.ProcessName).Where(n => !Hidden.Contains(n))
-        .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+    // Names of open apps with a window. Any app that closes while we look is simply skipped.
+    static List<string> WindowApps()
+    {
+        var names = new List<string>();
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                if (p.Id != Environment.ProcessId && p.MainWindowHandle != IntPtr.Zero)
+                {
+                    var n = p.ProcessName;
+                    if (!Hidden.Contains(n)) names.Add(n);
+                }
+            }
+            catch { }
+            finally { p.Dispose(); }
+        }
+        return names.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+    }
 
     Control BuildHue()
     {
