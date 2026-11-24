@@ -32,6 +32,9 @@ class MainForm : Form
     string? activeGame;
     string currentPage = "Display";
     const int HotkeyId = 0x5A11;
+    static readonly int QuitMsg = RegisterQuit("Syntra.Quit");
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "RegisterWindowMessage", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    static extern int RegisterQuit(string name);
 
     public MainForm()
     {
@@ -232,6 +235,7 @@ class MainForm : Form
     {
         if (m.Msg == Native.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId) ToggleEnabled();
         if (m.Msg == Program.ShowMsg && Program.ShowMsg != 0) ShowFromTray();
+        if (m.Msg == QuitMsg && QuitMsg != 0) Program.ExitApp();
         base.WndProc(ref m);
     }
 
@@ -840,6 +844,11 @@ class MainForm : Form
         gen.Controls.Add(Ui.Lbl($"NVIDIA driver vibrance: {(ColorEngine.HasDriverVibrance ? "found" : "not found — software saturation is used")}   ·   Running as admin: {(Program.IsAdmin ? "yes" : "no (normal)")}", Theme.Body, Theme.Muted, Ui.PageW - 40));
         gen.Controls.Add(Ui.Btn("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); UpdateHueOverlay(); S.Save(); }));
         gen.Controls.Add(Ui.Btn("Repair: restart as admin", () => Startup.RestartAsAdmin()));
+        gen.Controls.Add(Ui.Btn("Uninstall Syntra", () =>
+        {
+            if (Installer.Uninstall()) Program.ExitApp();
+        }));
+        gen.Controls.Add(Ui.Lbl($"Installed at {Installer.Dir}", Theme.Body, Theme.Muted, Ui.PageW - 40));
         page.Controls.Add(gen);
 
         var acc = Account.Load();

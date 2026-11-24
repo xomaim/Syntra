@@ -32,7 +32,18 @@ static class Program
     static void Main(string[] args)
     {
         using var mutex = new Mutex(true, @"Local\Syntra.SingleInstance", out bool first);
-        bool repair = args.Contains("--repair"), updated = args.Contains("--updated");
+        bool repair = args.Contains("--repair"), updated = args.Contains("--updated") || args.Contains("--installed");
+        if (args.Contains("--uninstall"))
+        {
+            Application.EnableVisualStyles();
+            Installer.Uninstall(() =>
+            {
+                if (first) return;
+                PostMessage(new IntPtr(0xFFFF), RegisterWindowMessage("Syntra.Quit"), IntPtr.Zero, IntPtr.Zero);
+                Thread.Sleep(2000);
+            });
+            return;
+        }
         if (!first)
         {
             if (!repair && !updated)
@@ -76,6 +87,9 @@ static class Program
             using var acc = new AccountForm();
             if (acc.ShowDialog() != DialogResult.OK) return;
         }
+
+        // Running the downloaded file: install to %LocalAppData%\Programs\Syntra, make shortcuts, open that copy.
+        if (Installer.InstallAndLaunch()) return;
 
         ColorEngine.Init();
 

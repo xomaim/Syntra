@@ -233,10 +233,10 @@ static class Startup
         return k?.GetValue("Syntra") != null;
     }
 
-    public static void Set(bool on)
+    public static void Set(bool on, string? exe = null)
     {
         using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey);
-        if (on) k.SetValue("Syntra", $"\"{Environment.ProcessPath}\" --tray");
+        if (on) k.SetValue("Syntra", $"\"{exe ?? Environment.ProcessPath}\" --tray");
         else k.DeleteValue("Syntra", false);
     }
 
