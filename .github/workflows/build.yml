@@ -1,0 +1,49 @@
+name: Build Syntra.exe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish single-file exe
+        run: dotnet publish src/Syntra.csproj -c Release -o out
+
+      - name: Show result
+        shell: bash
+        run: |
+          ls -la out
+          sha256sum out/Syntra.exe | tee out/sha.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Syntra
+          path: out/Syntra.exe
+
+      - name: Publish GitHub Release (only Syntra.exe)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA=$(cut -d' ' -f1 out/sha.txt)
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest out/Syntra.exe \
+            --title "Syntra (latest build)" \
+            --notes "Download **Syntra.exe** below and run it. Nothing else to install.
+
+          SHA-256: \`$SHA\`
+          Built from commit ${GITHUB_SHA::7}." \
+            --latest
