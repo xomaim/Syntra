@@ -277,47 +277,68 @@ class DarkInput : Panel
     }
 }
 
-// Page that can paint a background picture behind the panels.
-class PageFlow : FlowLayoutPanel
+// The background picture is drawn once at window size; every "back" surface (window, sidebar,
+// page, sidebar icons) draws its own slice of it, so the picture runs behind everything except the panels.
+static class Bg
 {
-    public static Image? Background;
+    public static Image? Source;
     public static int Dim = 40;
+    public static Form? Root;
+    public const int SideTint = 70;   // sidebar is a touch darker so icons stay readable
     static Bitmap? cache;
     static Size cacheSize;
     static Image? cacheSrc;
     static int cacheDim = -1;
+    static Color cacheBg;
 
-    public PageFlow()
-    {
-        DoubleBuffered = true;
-        SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
-    }
-
-    protected override void OnPaintBackground(PaintEventArgs e)
-    {
-        if (Background == null) { base.OnPaintBackground(e); return; }
-        var sz = ClientSize;
-        if (sz.Width < 1 || sz.Height < 1) return;
-        if (cache == null || cacheSize != sz || cacheSrc != Background || cacheDim != Dim)
-        {
-            cache?.Dispose();
-            cache = new Bitmap(sz.Width, sz.Height);
-            using var g = Graphics.FromImage(cache);
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            float scale = Math.Max((float)sz.Width / Background.Width, (float)sz.Height / Background.Height);
-            float w = Background.Width * scale, h = Background.Height * scale;
-            g.DrawImage(Background, (sz.Width - w) / 2, (sz.Height - h) / 2, w, h);
-            using var dim = new SolidBrush(Color.FromArgb((int)(Dim / 100.0 * 255), Theme.Bg));
-            g.FillRectangle(dim, 0, 0, sz.Width, sz.Height);
-            cacheSize = sz; cacheSrc = Background; cacheDim = Dim;
-        }
-        e.Graphics.DrawImageUnscaled(cache, 0, 0);
-    }
+    public static bool On => Source != null && Root != null;
 
     public static void ClearCache() { cache?.Dispose(); cache = null; }
 
-    protected override void OnScroll(ScrollEventArgs se) { base.OnScroll(se); if (Background != null) Invalidate(true); }
-    protected override void OnMouseWheel(MouseEventArgs e) { base.OnMouseWheel(e); if (Background != null) Invalidate(true); }
+    public static bool Paint(Graphics g, Control c, int tint = 0)
+    {
+        if (Source == null || Root == null || Root.IsDisposed) return false;
+        var sz = Root.ClientSize;
+        if (sz.Width < 1 || sz.Height < 1) return false;
+        if (cache == null || cacheSize != sz || cacheSrc != Source || cacheDim != Dim || cacheBg != Theme.Bg)
+        {
+            cache?.Dispose();
+            cache = new Bitmap(sz.Width, sz.Height);
+            using var cg = Graphics.FromImage(cache);
+            cg.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            float scale = Math.Max((float)sz.Width / Source.Width, (float)sz.Height / Source.Height);
+            float w = Source.Width * scale, h = Source.Height * scale;
+            cg.DrawImage(Source, (sz.Width - w) / 2, (sz.Height - h) / 2, w, h);
+            using var dim = new SolidBrush(Color.FromArgb((int)(Dim / 100.0 * 255), Theme.Bg));
+            cg.FillRectangle(dim, 0, 0, sz.Width, sz.Height);
+            cacheSize = sz; cacheSrc = Source; cacheDim = Dim; cacheBg = Theme.Bg;
+        }
+        Point off;
+        try { off = Root.PointToClient(c.PointToScreen(Point.Empty)); } catch { return false; }
+        g.DrawImageUnscaled(cache, -off.X, -off.Y);
+        if (tint > 0) using (var t = new SolidBrush(Color.FromArgb(tint, Theme.Side))) g.FillRectangle(t, 0, 0, c.Width, c.Height);
+        return true;
+    }
+}
+
+class BgPanel : Panel
+{
+    public int Tint;
+    public BgPanel() { DoubleBuffered = true; SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true); }
+    protected override void OnPaintBackground(PaintEventArgs e) { if (!Bg.Paint(e.Graphics, this, Tint)) base.OnPaintBackground(e); }
+}
+
+class BgFlow : FlowLayoutPanel
+{
+    public int Tint;
+    public BgFlow() { DoubleBuffered = true; SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true); }
+    protected override void OnPaintBackground(PaintEventArgs e) { if (!Bg.Paint(e.Graphics, this, Tint)) base.OnPaintBackground(e); }
+}
+
+class PageFlow : BgFlow
+{
+    protected override void OnScroll(ScrollEventArgs se) { base.OnScroll(se); if (Bg.On) Invalidate(true); }
+    protected override void OnMouseWheel(MouseEventArgs e) { base.OnMouseWheel(e); if (Bg.On) Invalidate(true); }
 }
 
 static class Ui
@@ -650,7 +671,7 @@ class NavIcon : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(Theme.Side);
+        if (!Bg.Paint(g, this, Bg.SideTint)) g.Clear(Theme.Side);
         if (selected || hover)
         {
             using var b = new SolidBrush(selected ? Theme.Accent : Theme.Hover);
@@ -753,7 +774,7 @@ class LogoTile : Control
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        g.Clear(Theme.Side);
+        if (!Bg.Paint(g, this, Parent is BgFlow { Tint: > 0 } ? Bg.SideTint : 0)) g.Clear(Parent?.BackColor ?? Theme.Side);
         using var b = new SolidBrush(Theme.Accent);
         using var path = Gfx.Round(new RectangleF(0, 0, Width - 1, Height - 1), 11);
         g.FillPath(b, path);

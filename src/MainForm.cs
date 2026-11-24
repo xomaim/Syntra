@@ -6,11 +6,12 @@ namespace Syntra;
 class MainForm : Form
 {
     readonly AppSettings S = Program.Settings;
-    readonly Panel content = new() { Dock = DockStyle.Fill };
-    readonly Panel sideHost = new() { Dock = DockStyle.Left, Width = 64 };
-    readonly FlowLayoutPanel side = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-    readonly FlowLayoutPanel sideBottom = new()
+    readonly BgPanel content = new() { Dock = DockStyle.Fill };
+    readonly BgPanel sideHost = new() { Dock = DockStyle.Left, Width = 64, Tint = Bg.SideTint };
+    readonly BgFlow side = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, Tint = Bg.SideTint };
+    readonly BgFlow sideBottom = new()
     {
+        Tint = Bg.SideTint,
         Dock = DockStyle.Bottom, Height = 124, FlowDirection = FlowDirection.TopDown, WrapContents = false,
         Padding = new Padding(0, 0, 0, 10),
     };
@@ -41,6 +42,9 @@ class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         Icon = MakeIcon();
         Ui.DarkTitle(this);
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.ResizeRedraw, true);
+        Bg.Root = this;
         Opacity = Math.Clamp(S.WindowOpacity, 60, 100) / 100.0;
 
         Controls.Add(content);
@@ -156,8 +160,12 @@ class MainForm : Form
         logo.Invalidate();
         sideHost.Invalidate();
         if (IsHandleCreated) Ui.RetitleColour(this);
-        PageFlow.ClearCache();
+        Bg.ClearCache();
+        Invalidate(true);
     }
+
+    protected override void OnPaintBackground(PaintEventArgs e) { if (!Bg.Paint(e.Graphics, this)) base.OnPaintBackground(e); }
+    protected override void OnResizeEnd(EventArgs e) { base.OnResizeEnd(e); if (Bg.On) Invalidate(true); }
 
     Look ActiveLook => activeGame != null && S.GameProfiles.TryGetValue(activeGame, out var l) ? l : S.Current;
 
@@ -668,16 +676,16 @@ class MainForm : Form
     // ---------- Customize ----------
     void LoadBackground()
     {
-        PageFlow.Background?.Dispose();
-        PageFlow.Background = null;
-        PageFlow.Dim = S.BackgroundDim;
-        PageFlow.ClearCache();
+        Bg.Source?.Dispose();
+        Bg.Source = null;
+        Bg.Dim = S.BackgroundDim;
+        Bg.ClearCache();
         if (S.BackgroundPath == "" || !File.Exists(S.BackgroundPath)) return;
         try
         {
             using var ms = new MemoryStream(File.ReadAllBytes(S.BackgroundPath));
             using var img = Image.FromStream(ms);
-            PageFlow.Background = new Bitmap(img);
+            Bg.Source = new Bitmap(img);
         }
         catch { }
     }
@@ -753,18 +761,18 @@ class MainForm : Form
             {
                 Directory.CreateDirectory(AppSettings.Dir);
                 var dest = Path.Combine(AppSettings.Dir, "background" + Path.GetExtension(d.FileName).ToLowerInvariant());
-                PageFlow.Background?.Dispose(); PageFlow.Background = null;
+                Bg.Source?.Dispose(); Bg.Source = null;
                 File.Copy(d.FileName, dest, true);
                 S.BackgroundPath = dest; S.Save();
-                LoadBackground(); Show("Customize");
+                LoadBackground(); Invalidate(true); Show("Customize");
             }
             catch (Exception ex) { MessageBox.Show(this, "Couldn't use that picture: " + ex.Message, "Syntra"); }
         }, true));
         if (S.BackgroundPath != "")
-            bg.Controls.Add(Ui.Btn("Remove", () => { S.BackgroundPath = ""; S.Save(); LoadBackground(); Show("Customize"); }));
+            bg.Controls.Add(Ui.Btn("Remove", () => { S.BackgroundPath = ""; S.Save(); LoadBackground(); Invalidate(true); Show("Customize"); }));
         var dim = new DarkSlider("Dim the picture", 0, 90, S.BackgroundDim, 45, 400) { Format = v => $"{v:0}%" };
-        dim.Changed += v => { S.BackgroundDim = (int)v; PageFlow.Dim = (int)v; };
-        dim.Released += () => { S.Save(); Show("Customize"); };
+        dim.Changed += v => { S.BackgroundDim = (int)v; Bg.Dim = (int)v; };
+        dim.Released += () => { S.Save(); Invalidate(true); };
         bg.Controls.Add(dim);
         page.Controls.Add(bg);
 
