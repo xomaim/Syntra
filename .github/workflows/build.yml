@@ -42,7 +42,7 @@ jobs:
           TAG="v1.0.${{ github.run_number }}"
           gh release delete latest --yes --cleanup-tag || true
           gh release create "$TAG" out/Syntra.exe \
-            --title "Syntra $TAG" \
+            --title "Syntra $TAG — Pixy Studios" \
             --notes "Download **Syntra.exe** below and run it. Nothing else to install. Syntra updates itself after this.
 
           SHA-256: \`$SHA\`

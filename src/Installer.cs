@@ -75,7 +75,7 @@ static class Installer
             s.TargetPath = Exe;
             s.WorkingDirectory = Dir;
             s.IconLocation = Exe + ",0";
-            s.Description = "Syntra — colour, resolution, crosshair";
+            s.Description = "Syntra by Pixy Studios";
             s.Save();
         }
         catch { }
@@ -89,7 +89,7 @@ static class Installer
             k.SetValue("DisplayName", "Syntra");
             k.SetValue("DisplayIcon", Exe + ",0");
             k.SetValue("DisplayVersion", Updater.Current.ToString());
-            k.SetValue("Publisher", "Syntra");
+            k.SetValue("Publisher", "Pixy Studios");
             k.SetValue("InstallLocation", Dir);
             k.SetValue("UninstallString", $"\"{Exe}\" --uninstall");
             k.SetValue("NoModify", 1, RegistryValueKind.DWord);

@@ -1,4 +1,4 @@
-# Syntra
+# Syntra — by Pixy Studios
 
 Colour, vibrance, resolution, monitor and crosshair tools for Windows 10 / 11 — in one `.exe`.
 

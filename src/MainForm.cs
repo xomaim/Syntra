@@ -860,7 +860,7 @@ class MainForm : Form
     Control BuildSettings()
     {
         var page = Ui.Page();
-        page.Controls.Add(Ui.Header("Settings", "How Syntra itself behaves."));
+        page.Controls.Add(Ui.Header("Settings", "How Syntra itself behaves.  ·  Syntra by Pixy Studios"));
 
         var gen = Ui.Card();
         gen.Controls.Add(Ui.Toggle("Launch with Windows", Startup.IsOn(), v => Startup.Set(v)));
@@ -902,12 +902,12 @@ class MainForm : Form
             ("No injection", "Never puts code into a game or any other program."),
             ("No drivers", "Installs no driver. Nothing runs at kernel level."),
             ("No admin needed", "Runs as you. Repair asks Windows first."),
-            ("Verified builds", "Every version is built by GitHub. Check it below."),
+            ("Official builds", "Every version comes from Pixy Studios. Check yours below."),
         })
             promise.Controls.Add(new PromiseTile(t, d));
         page.Controls.Add(promise);
 
-        var verify = Ui.Card("Verify this copy", "SHA-256 of the Syntra.exe now running. Compare it with the one on the GitHub release.");
+        var verify = Ui.Card("Verify this copy", "The fingerprint (SHA-256) of the Syntra.exe now running. It should match the official Pixy Studios release.");
         string hash;
         try { using var fs = File.OpenRead(Environment.ProcessPath!); hash = Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant(); }
         catch { hash = "unavailable"; }
@@ -919,7 +919,7 @@ class MainForm : Form
         {
             try { Process.Start(new ProcessStartInfo($"https://www.virustotal.com/gui/file/{hash}") { UseShellExecute = true }); } catch { }
         }, true));
-        var official = Ui.Lbl("Checking this copy against the official GitHub release…", Theme.Body, Theme.Muted, Ui.PageW - 40);
+        var official = Ui.Lbl("Checking this copy against the official Pixy Studios release…", Theme.Body, Theme.Muted, Ui.PageW - 40);
         verify.Controls.Add(official);
         _ = CheckOfficial(hash, official);
         page.Controls.Add(verify);
@@ -939,10 +939,10 @@ class MainForm : Form
             var m = System.Text.RegularExpressions.Regex.Match(body, "[0-9a-fA-F]{64}");
             if (!m.Success) { text = "No official fingerprint found for this version."; col = Theme.Muted; }
             else if (string.Equals(m.Value, hash, StringComparison.OrdinalIgnoreCase))
-            { text = $"✓  Legit — this is the official Syntra v{Updater.Current} built by GitHub."; col = Theme.Good; }
-            else { text = "✗  This file does NOT match the official release. Download Syntra again from GitHub."; col = Theme.Warn; }
+            { text = $"✓  Legit — this is the official Syntra v{Updater.Current} from Pixy Studios."; col = Theme.Good; }
+            else { text = "✗  This file does NOT match the official Pixy Studios release. Download Syntra again from the official link."; col = Theme.Warn; }
         }
-        catch { text = "Couldn't reach GitHub to check right now."; col = Theme.Muted; }
+        catch { text = "Couldn't reach the Pixy Studios release server right now."; col = Theme.Muted; }
         if (result.IsDisposed) return;
         result.Text = text; result.ForeColor = col;
     }

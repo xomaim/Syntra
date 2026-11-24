@@ -10,6 +10,9 @@
     <RootNamespace>Syntra</RootNamespace>
     <Version>1.0.0</Version>
     <Product>Syntra</Product>
+    <Company>Pixy Studios</Company>
+    <Authors>Pixy Studios</Authors>
+    <Copyright>© 2026 Pixy Studios</Copyright>
     <Description>Changes what your monitor shows. Never touches the game.</Description>
     <!-- One .exe, nothing else to download -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

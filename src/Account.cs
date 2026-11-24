@@ -59,17 +59,17 @@ sealed class TermsForm : Form
         ("4. Your account",
          "Your account (name, username and password) is stored only on this PC. Your password is never saved — only a salted, scrambled check of it. Keep your password to yourself. If you forget it, you can reset Syntra on this PC by deleting its settings folder."),
         ("5. Your data and privacy",
-         "Your settings, looks, profiles, themes and background picture stay on your PC in %AppData%\\Syntra. Syntra doesn't sell, share or upload them. It only connects to the internet to check GitHub for updates and download them, and when you choose to check your copy on GitHub or VirusTotal."),
+         "Your settings, looks, profiles, themes and background picture stay on your PC in %AppData%\\Syntra. Syntra doesn't sell, share or upload them. It only connects to the internet to check for updates and download them from the official Pixy Studios release page, and when you choose to check your copy or open VirusTotal."),
         ("6. Updates",
          "Syntra checks for a newer version about once a minute and installs it automatically, then restarts. You can turn this off in Settings. Updates may add, change or remove features. When an update changes these Terms, you may be asked to accept them again."),
         ("7. Using Syntra properly",
-         "Don't sell, rent or redistribute Syntra as your own, don't pass off a modified copy as the official one, and don't use Syntra to break the law or anyone else's rules. Official copies come only from the Syntra GitHub releases page — Settings shows whether your copy is the official one."),
+         "Don't sell, rent or redistribute Syntra as your own, don't pass off a modified copy as the official one, and don't use Syntra to break the law or anyone else's rules. Official copies come only from Pixy Studios' official Syntra download — Settings shows whether your copy is the official one."),
         ("8. Your screen and health",
          "Strong colour, brightness and contrast changes can be uncomfortable. Take breaks. If you are sensitive to flashing or colour changes, use Syntra carefully. Exiting Syntra from the tray, or pressing Ctrl + Alt + V, puts your screen back to normal."),
         ("9. No warranty",
          "Syntra is provided \"as is\" and \"as available\", without any warranty of any kind. It may have bugs, may not work on every PC, monitor or graphics card, and may stop working after Windows or driver updates."),
         ("10. Limit of liability",
-         "As far as the law allows, the makers of Syntra are not responsible for any loss or damage from using it or not being able to use it — including bans, lost progress, lost data, or problems with your PC or monitor. Nothing in these Terms removes rights you have by law that can't be removed."),
+         "As far as the law allows, Pixy Studios is not responsible for any loss or damage from using it or not being able to use it — including bans, lost progress, lost data, or problems with your PC or monitor. Nothing in these Terms removes rights you have by law that can't be removed."),
         ("11. Ending",
          "You can stop using Syntra at any time: exit it from the tray and delete Syntra.exe and the %AppData%\\Syntra folder. If you break these Terms, you are no longer allowed to use Syntra."),
         ("12. Changes to these Terms",
@@ -96,7 +96,7 @@ sealed class TermsForm : Form
         var header = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Theme.Bg };
         var logo = new LogoTile { Location = new Point(32, 28) };
         var title = new Label { Text = "Terms of Service", Font = Theme.H1, ForeColor = Theme.Text, AutoSize = true, Location = new Point(84, 22), BackColor = Color.Transparent };
-        var sub = new Label { Text = "Please read these before using Syntra.   Last updated 24 November 2026", Font = Theme.Body, ForeColor = Theme.Muted, AutoSize = true, Location = new Point(87, 62), BackColor = Color.Transparent };
+        var sub = new Label { Text = "Pixy Studios  ·  Please read these before using Syntra  ·  Updated 24 Nov 2026", Font = Theme.Body, ForeColor = Theme.Muted, AutoSize = true, Location = new Point(87, 62), BackColor = Color.Transparent };
         header.Controls.AddRange(new Control[] { logo, title, sub });
         header.Paint += (_, e) => { using var p = new Pen(Theme.Border); e.Graphics.DrawLine(p, 32, header.Height - 1, header.Width - 32, header.Height - 1); };
 
@@ -124,7 +124,7 @@ sealed class TermsForm : Form
         viewport.Controls.Add(flow);
 
         const int W = 640 - 64;
-        flow.Controls.Add(Para("Welcome to Syntra. These Terms are a simple agreement between you and the makers of Syntra about how you can use the app. They're written in plain English — please read them all.", Theme.Text, W, 10.5f, 18));
+        flow.Controls.Add(Para("Welcome to Syntra. These Terms are a simple agreement between you and Pixy Studios, the makers of Syntra, about how you can use the app. They're written in plain English — please read them all.", Theme.Text, W, 10.5f, 18));
         foreach (var (head, body) in Sections)
         {
             var h = Ui.Lbl(head, new Font("Segoe UI Semibold", 12.5f), Theme.Text, W);
@@ -132,7 +132,7 @@ sealed class TermsForm : Form
             flow.Controls.Add(h);
             flow.Controls.Add(Para(body, Theme.Mix(Theme.Text, Theme.Muted, 0.35), W, 10.5f, 12));
         }
-        flow.Controls.Add(Para("Thanks for using Syntra.", Theme.Muted, W, 10.5f, 4));
+        flow.Controls.Add(Para("Thanks for using Syntra.  — Pixy Studios", Theme.Muted, W, 10.5f, 4));
 
         flow.Scroll += (_, _) => CheckRead();
         flow.MouseWheel += (_, _) => CheckRead();
