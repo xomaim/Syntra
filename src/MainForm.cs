@@ -6,27 +6,29 @@ namespace Syntra;
 class MainForm : Form
 {
     readonly AppSettings S = Program.Settings;
-    readonly Panel content = new() { Dock = DockStyle.Fill, BackColor = Theme.Bg };
-    readonly FlowLayoutPanel side = new()
-    {
-        Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-        BackColor = Theme.Side, Padding = new Padding(0, 0, 0, 0),
-    };
-    readonly Panel sideHost = new() { Dock = DockStyle.Left, Width = 64, BackColor = Theme.Side };
+    readonly Panel content = new() { Dock = DockStyle.Fill };
+    readonly Panel sideHost = new() { Dock = DockStyle.Left, Width = 64 };
+    readonly FlowLayoutPanel side = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
     readonly FlowLayoutPanel sideBottom = new()
     {
-        Dock = DockStyle.Bottom, Height = 132, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-        BackColor = Theme.Side, Padding = new Padding(0, 0, 0, 10),
+        Dock = DockStyle.Bottom, Height = 124, FlowDirection = FlowDirection.TopDown, WrapContents = false,
+        Padding = new Padding(0, 0, 0, 10),
     };
+    readonly LogoTile logo = new();
     readonly ToolTip tips = new() { InitialDelay = 250 };
     readonly Dictionary<string, Func<Control>> pages = new();
     readonly Dictionary<string, NavIcon> navButtons = new();
     readonly NotifyIcon tray = new();
+    readonly ContextMenuStrip menu = new();
     readonly System.Windows.Forms.Timer watch = new() { Interval = 1000 };
+    readonly System.Windows.Forms.Timer applyTimer = new() { Interval = 15 };
     readonly System.Windows.Forms.Timer saveDebounce = new() { Interval = 600 };
+    readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 60_000 };
+    bool dirty;
     MonitorDdc? ddc;
     CrosshairOverlay? overlay;
-    string? activeGame;          // exe name of the game whose profile is in use
+    HueOverlay? hueOverlay;
+    string? activeGame;
     string currentPage = "Display";
     const int HotkeyId = 0x5A11;
 
@@ -35,50 +37,72 @@ class MainForm : Form
         Text = "Syntra";
         Size = new Size(1080, 720);
         MinimumSize = new Size(1000, 560);
-        BackColor = Theme.Bg;
-        ForeColor = Theme.Text;
         Font = Theme.Body;
         StartPosition = FormStartPosition.CenterScreen;
         Icon = MakeIcon();
         Ui.DarkTitle(this);
+        Opacity = Math.Clamp(S.WindowOpacity, 60, 100) / 100.0;
 
         Controls.Add(content);
+        content.Resize += (_, _) => FitPage();
         sideHost.Controls.Add(side);
         sideHost.Controls.Add(sideBottom);
         sideHost.Paint += (_, e) => { using var pen = new Pen(Theme.Border); e.Graphics.DrawLine(pen, sideHost.Width - 1, 0, sideHost.Width - 1, sideHost.Height); };
         Controls.Add(sideHost);
 
-        side.Controls.Add(new LogoTile());
+        side.Controls.Add(logo);
         AddPage("Display", IconKind.Display, BuildDisplay);
         AddPage("Resolution", IconKind.Resolution, BuildResolution);
         AddPage("Monitor", IconKind.Monitor, BuildMonitor);
+        AddPage("Hue changer", IconKind.Hue, BuildHue);
         AddPage("Crosshair", IconKind.Crosshair, BuildCrosshair);
         AddPage("Profiles", IconKind.Profiles, BuildProfiles);
+        AddPage("Customize", IconKind.Customize, BuildCustomize);
         AddPage("Settings", IconKind.Settings, BuildSettings, bottom: true);
         var exit = new NavIcon(IconKind.Exit);
         tips.SetToolTip(exit, "Exit (puts your screen back)");
         exit.Click += (_, _) => Program.ExitApp();
         sideBottom.Controls.Add(exit);
 
+        LoadBackground();
+        ApplyThemeColours();
+
         saveDebounce.Tick += (_, _) => { saveDebounce.Stop(); S.Save(); };
+        applyTimer.Tick += (_, _) => { if (dirty) { dirty = false; ApplyNow(); } };
+        applyTimer.Start();
 
         tray.Icon = Icon;
         tray.Text = "Syntra";
         tray.Visible = true;
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("Open Syntra", null, (_, _) => ShowFromTray());
-        menu.Items.Add("Colours on / off  (Ctrl+Alt+V)", null, (_, _) => ToggleEnabled());
-        menu.Items.Add("Put my screen back to normal", null, (_, _) => { S.Enabled = false; ApplyNow(); });
+        menu.Renderer = new DarkMenuRenderer();
+        menu.ShowImageMargin = false;
+        menu.Font = new Font("Segoe UI", 10f);
+        menu.Padding = new Padding(4, 6, 4, 6);
+        menu.HandleCreated += (_, _) => Gfx.RoundCorners(menu.Handle);
+        void Item(string text, Action a)
+        {
+            var it = new ToolStripMenuItem(text) { Padding = new Padding(8, 6, 8, 6) };
+            it.Click += (_, _) => a();
+            menu.Items.Add(it);
+        }
+        Item("Open Syntra", ShowFromTray);
+        Item("Colours on / off      Ctrl+Alt+V", ToggleEnabled);
+        Item("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); S.Save(); });
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit (restores your screen)", null, (_, _) => Program.ExitApp());
+        Item("Exit", Program.ExitApp);
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => ShowFromTray();
 
         watch.Tick += (_, _) => WatchForeground();
         watch.Start();
 
+        updateTimer.Tick += async (_, _) => await CheckUpdate();
+        updateTimer.Start();
+        BeginInvoke(new Action(async () => await CheckUpdate()));
+
         Show("Display");
         ApplyNow();
+        UpdateHueOverlay();
         if (S.Crosshair.On) ShowCrosshair(true);
     }
 
@@ -100,25 +124,56 @@ class MainForm : Form
         content.SuspendLayout();
         foreach (Control c in content.Controls) c.Dispose();
         content.Controls.Clear();
-        content.Controls.Add(pages[name]());
+
+        // The page is made a little wider/taller than the window so its scrollbar sits out of sight.
+        var page = pages[name]();
+        page.Dock = DockStyle.None;
+        page.Location = Point.Empty;
+        currentControl = page;
+        FitPage();
+        content.Controls.Add(page);
         content.ResumeLayout();
+    }
+
+    Control? currentControl;
+
+    void FitPage()
+    {
+        if (currentControl == null || currentControl.IsDisposed) return;
+        currentControl.Size = new Size(content.ClientSize.Width + SystemInformation.VerticalScrollBarWidth,
+                                       content.ClientSize.Height + SystemInformation.HorizontalScrollBarHeight);
     }
 
     void Refresh(string page) { if (currentPage == page) Show(page); }
 
-    Look ActiveLook => activeGame != null && S.GameProfiles.TryGetValue(activeGame, out var l) ? l : S.Current;
-
-    void ApplyNow()
+    void ApplyThemeColours()
     {
-        if (S.Enabled) ColorEngine.Apply(ActiveLook, S.LowBlue);
-        else ColorEngine.Reset();
+        BackColor = Theme.Bg;
+        ForeColor = Theme.Text;
+        content.BackColor = Theme.Bg;
+        sideHost.BackColor = side.BackColor = sideBottom.BackColor = Theme.Side;
+        foreach (var b in navButtons.Values) { b.BackColor = Theme.Side; b.Invalidate(); }
+        logo.Invalidate();
+        sideHost.Invalidate();
+        if (IsHandleCreated) Ui.RetitleColour(this);
+        PageFlow.ClearCache();
     }
 
-    void Changed() { ApplyNow(); saveDebounce.Stop(); saveDebounce.Start(); }
+    Look ActiveLook => activeGame != null && S.GameProfiles.TryGetValue(activeGame, out var l) ? l : S.Current;
 
-    void ToggleEnabled() { S.Enabled = !S.Enabled; ApplyNow(); S.Save(); Refresh("Display"); }
+    void ApplyNow(bool forceRamp = false)
+    {
+        if (!S.Enabled) { ColorEngine.Reset(); return; }
+        bool wholeHue = S.HueOn && S.HueTarget == "";
+        ColorEngine.Apply(ActiveLook, S.LowBlue, wholeHue ? S.HueDegrees : 0, wholeHue ? S.HueSat / 100.0 : 1, forceRamp);
+    }
 
-    // Uses only the foreground window's process *name* (like Task Manager shows). Never opens the game's memory.
+    // Slider moves only mark "dirty"; a 15 ms timer applies the newest value. Fast, never queues up.
+    void Changed() { dirty = true; saveDebounce.Stop(); saveDebounce.Start(); }
+
+    void ToggleEnabled() { S.Enabled = !S.Enabled; ApplyNow(); UpdateHueOverlay(); S.Save(); Refresh("Display"); }
+
+    // Uses only the foreground window's process *name*. Never opens the game's memory.
     void WatchForeground()
     {
         string? game = null;
@@ -129,8 +184,7 @@ class MainForm : Form
             {
                 Native.GetWindowThreadProcessId(h, out var pid);
                 using var p = Process.GetProcessById((int)pid);
-                var n = p.ProcessName;
-                if (S.GameProfiles.ContainsKey(n)) game = n;
+                if (S.GameProfiles.ContainsKey(p.ProcessName)) game = p.ProcessName;
             }
         }
         catch { }
@@ -140,7 +194,18 @@ class MainForm : Form
             ApplyNow();
             if (currentPage is "Display" or "Profiles") Show(currentPage);
         }
-        if (S.Enabled) ColorEngine.Apply(ActiveLook, S.LowBlue); // some games reset gamma on launch; re-assert gently
+        else if (S.Enabled) ApplyNow(forceRamp: true); // some games reset gamma on launch
+    }
+
+    async Task CheckUpdate()
+    {
+        if (!S.AutoUpdate) return;
+        var tag = await Updater.CheckAsync();
+        if (currentPage == "Settings" && Visible) Show("Settings");
+        if (tag == null) return;
+        tray.ShowBalloonTip(3000, "Syntra updated", $"Restarting into {tag}…", ToolTipIcon.Info);
+        await Task.Delay(1500);
+        Updater.Restart(tray: !Visible);
     }
 
     void ShowFromTray() { Show(); WindowState = FormWindowState.Normal; Activate(); }
@@ -148,7 +213,7 @@ class MainForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        Native.RegisterHotKey(Handle, HotkeyId, 0x1 | 0x2 | 0x4000, (uint)Keys.V); // Ctrl+Alt+V, no repeat
+        Native.RegisterHotKey(Handle, HotkeyId, 0x1 | 0x2 | 0x4000, (uint)Keys.V);
     }
 
     protected override void WndProc(ref Message m)
@@ -171,9 +236,10 @@ class MainForm : Form
 
     public void Cleanup()
     {
-        watch.Stop();
+        watch.Stop(); updateTimer.Stop(); applyTimer.Stop();
         try { Native.UnregisterHotKey(Handle, HotkeyId); } catch { }
         overlay?.Close();
+        hueOverlay?.Close();
         S.Save();
         tray.Visible = false;
         tray.Dispose();
@@ -187,13 +253,11 @@ class MainForm : Form
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             g.Clear(Color.Transparent);
-            using var p = new Pen(Color.White, 3);
-            for (int i = 0; i < 4; i++)
-            {
-                double a = i * Math.PI / 4;
-                float dx = (float)(Math.Cos(a) * 13), dy = (float)(Math.Sin(a) * 13);
-                g.DrawLine(p, 16 - dx, 16 - dy, 16 + dx, 16 + dy);
-            }
+            using var b = new SolidBrush(Color.White);
+            using var path = Gfx.Round(new RectangleF(1, 1, 30, 30), 8);
+            g.FillPath(b, path);
+            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.DrawString("S", new Font("Segoe UI Black", 18f, FontStyle.Bold, GraphicsUnit.Pixel), Brushes.Black, new RectangleF(0, 1, 32, 32), sf);
         }
         return Icon.FromHandle(bmp.GetHicon());
     }
@@ -203,9 +267,9 @@ class MainForm : Form
     {
         var page = Ui.Page();
         var L = ActiveLook;
-        string status = !S.Enabled ? "● Off" : activeGame != null ? $"● Live · {activeGame} profile" : "● Live";
+        string status = !S.Enabled ? "● Off" : activeGame != null ? $"● Live · {activeGame}" : "● Live";
         var live = Ui.Lbl(status, Theme.H2, S.Enabled ? Theme.Good : Theme.Muted);
-        live.Margin = new Padding(4, 8, 12, 4);
+        live.Margin = new Padding(4, 10, 12, 4);
         page.Controls.Add(Ui.Header("Display", "Presets are starting points. The sliders work in whatever you play.",
             live,
             Ui.Btn(S.Enabled ? "Turn off" : "Turn on", ToggleEnabled),
@@ -255,7 +319,7 @@ class MainForm : Form
             S.Saved.RemoveAll(x => x.Name == c.Name);
             S.Saved.Add(c); S.Save(); Show("Display");
         }));
-        presets.Controls.Add(Ui.Btn("Delete saved", () =>
+        presets.Controls.Add(Ui.Btn("Delete", () =>
         {
             if (combo.SelectedIndex < 0) return;
             var n = all[combo.SelectedIndex].Name;
@@ -264,7 +328,7 @@ class MainForm : Form
         if (!ColorEngine.HasMatrix)
             presets.Controls.Add(Ui.Lbl("Windows colour effects are unavailable, so saturation can't be changed on this PC. Gamma and fine tune still work.", Theme.Body, Theme.Warn, 290));
 
-        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = Theme.Bg, Margin = new Padding(0) };
+        var row = new FlowLayoutPanel { AutoSize = true, WrapContents = false, BackColor = Color.Transparent, Margin = new Padding(0) };
         fine.Margin = new Padding(0, 0, 12, 12);
         row.Controls.Add(fine); row.Controls.Add(presets);
         page.Controls.Add(row);
@@ -300,7 +364,7 @@ class MainForm : Form
                 int hz = modes.Where(m => m.W == rr.W && m.H == rr.H).Select(m => m.Hz).DefaultIfEmpty(60).Max();
                 TryMode(new DisplayModes.Mode(rr.W, rr.H, hz));
             }, r.W == cur.W && r.H == cur.H);
-            b.AutoSize = false; b.Size = new Size(150, 34);
+            b.AutoSize = false; b.Size = new Size(158, 40); b.Margin = new Padding(5);
             res.Controls.Add(b);
         }
         page.Controls.Add(res);
@@ -310,7 +374,7 @@ class MainForm : Form
         {
             var h = hz;
             var b = Ui.Btn($"{hz} Hz", () => TryMode(cur with { Hz = h }), hz == cur.Hz);
-            b.AutoSize = false; b.Size = new Size(110, 34);
+            b.AutoSize = false; b.Size = new Size(110, 40); b.Margin = new Padding(5);
             hzCard.Controls.Add(b);
         }
         page.Controls.Add(hzCard);
@@ -324,11 +388,15 @@ class MainForm : Form
         page.Controls.Add(pvp);
 
         var custom = Ui.Card("Custom", "Only modes your display reports can be used.");
-        var tw = new NumericUpDown { Maximum = 7680, Minimum = 640, Value = cur.W, Width = 80, BackColor = Theme.Bg, ForeColor = Theme.Text };
-        var th = new NumericUpDown { Maximum = 4320, Minimum = 480, Value = cur.H, Width = 80, BackColor = Theme.Bg, ForeColor = Theme.Text };
-        var thz = new NumericUpDown { Maximum = 540, Minimum = 24, Value = cur.Hz, Width = 70, BackColor = Theme.Bg, ForeColor = Theme.Text };
-        custom.Controls.AddRange(new Control[] { tw, Ui.Lbl("×"), th, Ui.Lbl("at"), thz, Ui.Lbl("Hz"),
-            Ui.Btn("Apply", () => TryMode(new DisplayModes.Mode((int)tw.Value, (int)th.Value, (int)thz.Value)), true) });
+        var tw = new DarkInput("Width", 110); tw.Box.Text = cur.W.ToString();
+        var th = new DarkInput("Height", 110); th.Box.Text = cur.H.ToString();
+        var thz = new DarkInput("Hz", 90); thz.Box.Text = cur.Hz.ToString();
+        custom.Controls.AddRange(new Control[] { tw, th, thz,
+            Ui.Btn("Apply", () =>
+            {
+                if (int.TryParse(tw.Box.Text, out var w) && int.TryParse(th.Box.Text, out var h) && int.TryParse(thz.Box.Text, out var z))
+                    TryMode(new DisplayModes.Mode(w, h, z));
+            }, true) });
         page.Controls.Add(custom);
         return page;
     }
@@ -355,14 +423,14 @@ class MainForm : Form
         int left = 15;
         using var f = new Form
         {
-            Text = "Keep this display mode?", Size = new Size(380, 170), StartPosition = FormStartPosition.CenterScreen,
+            Text = "Keep this display mode?", Size = new Size(400, 190), StartPosition = FormStartPosition.CenterScreen,
             FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, TopMost = true,
             BackColor = Theme.Card, ForeColor = Theme.Text, Font = Theme.Body,
         };
         Ui.DarkTitle(f);
-        var lbl = new Label { Text = $"Going back in {left} s.", Location = new Point(20, 20), AutoSize = true };
-        var keep = new Button { Text = "Keep", DialogResult = DialogResult.OK, Location = new Point(170, 80), Size = new Size(85, 32), FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.Black };
-        var back = new Button { Text = "Go back", DialogResult = DialogResult.Cancel, Location = new Point(265, 80), Size = new Size(85, 32), FlatStyle = FlatStyle.Flat };
+        var lbl = new Label { Text = $"Going back in {left} s.", Location = new Point(22, 22), AutoSize = true, Font = Theme.H2 };
+        var keep = new RoundButton { Text = "Keep", Primary = true, DialogResult = DialogResult.OK, Location = new Point(166, 90), Size = new Size(96, 40) };
+        var back = new RoundButton { Text = "Go back", DialogResult = DialogResult.Cancel, Location = new Point(270, 90), Size = new Size(96, 40) };
         f.Controls.AddRange(new Control[] { lbl, keep, back });
         f.AcceptButton = keep; f.CancelButton = back;
         using var t = new System.Windows.Forms.Timer { Interval = 1000 };
@@ -408,6 +476,72 @@ class MainForm : Form
         return page;
     }
 
+    // ---------- Hue changer ----------
+    void UpdateHueOverlay()
+    {
+        bool perApp = S.Enabled && S.HueOn && S.HueTarget != "";
+        if (!perApp) { hueOverlay?.Close(); hueOverlay = null; return; }
+        hueOverlay ??= new HueOverlay();
+        hueOverlay.Target = S.HueTarget;
+        hueOverlay.SetEffect(S.HueDegrees, S.HueSat / 100.0);
+    }
+
+    static List<string> WindowApps() => Process.GetProcesses()
+        .Where(p => { try { return p.MainWindowHandle != IntPtr.Zero && p.Id != Environment.ProcessId; } catch { return false; } })
+        .Select(p => p.ProcessName).Where(n => !Hidden.Contains(n))
+        .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+
+    Control BuildHue()
+    {
+        var page = Ui.Page();
+        page.Controls.Add(Ui.Header("Hue changer", "Shift colours on the whole screen, or on just one app."));
+
+        var where = Ui.Card("Where", "Pick “Whole screen”, or an app that's open — like Discord — to change only that app.");
+        var apps = WindowApps();
+        if (S.HueTarget != "" && !apps.Contains(S.HueTarget, StringComparer.OrdinalIgnoreCase)) apps.Insert(0, S.HueTarget);
+        var items = new List<string> { "Whole screen" };
+        items.AddRange(apps);
+        var target = Ui.Combo(items, 320);
+        target.SelectedIndex = S.HueTarget == "" ? 0 : items.FindIndex(x => string.Equals(x, S.HueTarget, StringComparison.OrdinalIgnoreCase));
+        target.SelectedChanged += () =>
+        {
+            S.HueTarget = target.SelectedIndex <= 0 ? "" : target.SelectedItem!;
+            S.Save(); ApplyNow(); UpdateHueOverlay();
+        };
+        where.Controls.Add(target);
+        where.Controls.Add(Ui.Btn("Refresh apps", () => Show("Hue changer")));
+        where.Controls.Add(Ui.Toggle("Hue changer on", S.HueOn, v => { S.HueOn = v; S.Save(); ApplyNow(); UpdateHueOverlay(); }));
+        page.Controls.Add(where);
+
+        var card = Ui.Card("Colour");
+        var preview = new HuePreview(Ui.PageW - 40) { Degrees = S.HueDegrees, Sat = S.HueSat };
+        var hue = new DarkSlider("Hue shift", -180, 180, S.HueDegrees, 0, 410) { Format = v => $"{v:0}°", Mark = 0 };
+        var hs = new DarkSlider("Colour strength", 0, 200, S.HueSat, 100, 410) { Format = v => $"{v:0}%", Mark = 100 };
+        void Push()
+        {
+            preview.Degrees = S.HueDegrees; preview.Sat = S.HueSat; preview.Invalidate();
+            if (S.HueTarget == "") Changed(); else hueOverlay?.SetEffect(S.HueDegrees, S.HueSat / 100.0);
+            saveDebounce.Stop(); saveDebounce.Start();
+        }
+        hue.Changed += v => { S.HueDegrees = v; Push(); };
+        hs.Changed += v => { S.HueSat = v; Push(); };
+        card.Controls.Add(hue); card.Controls.Add(hs); card.Controls.Add(preview);
+        var quick = new FlowLayoutPanel { AutoSize = true, BackColor = Theme.Card, Margin = new Padding(0) };
+        foreach (var (n, d) in new[] { ("Reset", 0), ("Warm", -25), ("Cool", 30), ("Purple", 90), ("Swap", 180) })
+        {
+            var deg = d;
+            quick.Controls.Add(Ui.Btn(n, () => { S.HueDegrees = deg; hue.SetValue(deg); if (deg == 0) { S.HueSat = 100; hs.SetValue(100); } Push(); }));
+        }
+        card.Controls.Add(quick);
+        page.Controls.Add(card);
+
+        string note = S.HueTarget == ""
+            ? "Whole screen: changes everything you see, games included."
+            : $"Only {S.HueTarget}: a see-through layer follows that window while it's in front. It never touches the app itself. Works best with the app in a normal (not exclusive full-screen) window.";
+        page.Controls.Add(Ui.Lbl(note, Theme.Body, Theme.Muted, Ui.PageW));
+        return page;
+    }
+
     // ---------- Crosshair ----------
     void ShowCrosshair(bool on)
     {
@@ -424,59 +558,88 @@ class MainForm : Form
     {
         var page = Ui.Page();
         var c = S.Crosshair;
-        page.Controls.Add(Ui.Header("Crosshair", "A see-through window in the middle of your screen. Works in borderless/windowed games."));
+        page.Controls.Add(Ui.Header("Crosshair", "A see-through crosshair in the middle of your screen. Works in borderless/windowed games."));
+
         var card = Ui.Card();
-        card.Controls.Add(Ui.Toggle("Show crosshair", c.On, v => { c.On = v; ShowCrosshair(v); S.Save(); }));
-        card.Controls.Add(Ui.Toggle("Black outline", c.Outline, v => { c.Outline = v; overlay?.Invalidate(); S.Save(); }));
-        card.Controls.Add(Ui.Toggle("Centre dot", c.CenterDot, v => { c.CenterDot = v; overlay?.Invalidate(); S.Save(); }));
-        var style = Ui.Combo(new[] { "Cross", "T", "Dot", "Circle" }, 160);
+        var preview = new CrosshairPreview(c, 420, 250);
+        void Redraw() { preview.Invalidate(); overlay?.Invalidate(); }
+        var controls = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, BackColor = Theme.Card, WrapContents = false, Margin = new Padding(0) };
+        controls.Controls.Add(Ui.Toggle("Show crosshair", c.On, v => { c.On = v; ShowCrosshair(v); S.Save(); }));
+        var style = Ui.Combo(new[] { "Cross", "T", "Dot", "Circle" }, 380);
         style.SelectedItem = c.Style;
-        style.SelectedChanged += () => { c.Style = (string)style.SelectedItem!; overlay?.Invalidate(); S.Save(); };
-        card.Controls.Add(style);
+        style.SelectedChanged += () => { c.Style = style.SelectedItem!; Redraw(); S.Save(); };
+        controls.Controls.Add(style);
         void Sl(string t, int min, int max, int val, int def, Action<int> set)
         {
-            var s = new DarkSlider(t, min, max, val, def, 260);
-            s.Changed += v => { set((int)v); overlay?.Invalidate(); };
+            var s = new DarkSlider(t, min, max, val, def, 380);
+            s.Changed += v => { set((int)v); Redraw(); };
             s.Released += () => S.Save();
-            card.Controls.Add(s);
+            controls.Controls.Add(s);
         }
         Sl("Size", 2, 60, c.Size, 10, v => c.Size = v);
         Sl("Thickness", 1, 8, c.Thickness, 2, v => c.Thickness = v);
         Sl("Gap", 0, 20, c.Gap, 3, v => c.Gap = v);
+        card.Controls.Add(preview);
+        card.Controls.Add(controls);
         page.Controls.Add(card);
 
-        var colours = Ui.Card("Colour");
+        var extra = Ui.Card("Colour");
         foreach (var col in new[] { Color.FromArgb(0, 255, 102), Color.Red, Color.Cyan, Color.Yellow, Color.Magenta, Color.White })
         {
             var cc = col;
-            var b = new Button { BackColor = cc, FlatStyle = FlatStyle.Flat, Size = new Size(40, 30), Margin = new Padding(4), Cursor = Cursors.Hand };
-            b.FlatAppearance.BorderColor = c.Argb == cc.ToArgb() ? Color.White : Theme.Border;
-            b.FlatAppearance.BorderSize = 2;
-            b.Click += (_, _) => { c.Argb = cc.ToArgb(); overlay?.Invalidate(); S.Save(); Show("Crosshair"); };
-            colours.Controls.Add(b);
+            var b = new Swatch(cc, c.Argb == cc.ToArgb());
+            b.Click += (_, _) => { c.Argb = cc.ToArgb(); S.Save(); Show("Crosshair"); };
+            extra.Controls.Add(b);
         }
-        colours.Controls.Add(Ui.Btn("Pick…", () =>
+        extra.Controls.Add(Ui.Btn("Pick…", () =>
         {
             using var d = new ColorDialog { Color = Color.FromArgb(c.Argb), FullOpen = true };
-            if (d.ShowDialog(this) == DialogResult.OK) { c.Argb = Color.FromArgb(255, d.Color).ToArgb(); overlay?.Invalidate(); S.Save(); Show("Crosshair"); }
+            if (d.ShowDialog(this) == DialogResult.OK) { c.Argb = Color.FromArgb(255, d.Color).ToArgb(); S.Save(); Show("Crosshair"); }
         }));
-        page.Controls.Add(colours);
-        page.Controls.Add(Ui.Lbl("Exclusive full-screen games draw over every window, so use borderless/windowed full-screen for the overlay crosshair.", Theme.Body, Theme.Muted, Ui.PageW));
+        extra.Controls.Add(Ui.Toggle("Black outline", c.Outline, v => { c.Outline = v; Redraw(); S.Save(); }));
+        extra.Controls.Add(Ui.Toggle("Centre dot", c.CenterDot, v => { c.CenterDot = v; Redraw(); S.Save(); }));
+        page.Controls.Add(extra);
+        overlay?.Invalidate();
         return page;
     }
 
+    // Round colour dot button.
+    sealed class Swatch : Control
+    {
+        readonly Color col; readonly bool sel; bool hover;
+        public Swatch(Color c, bool selected)
+        {
+            col = c; sel = selected;
+            Size = new Size(36, 36); Margin = new Padding(4); Cursor = Cursors.Hand;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Theme.Card);
+            if (sel || hover) using (var p = new Pen(sel ? Theme.Accent : Theme.Muted, 2)) g.DrawEllipse(p, 1, 1, Width - 3, Height - 3);
+            using var b = new SolidBrush(col);
+            g.FillEllipse(b, 6, 6, Width - 13, Height - 13);
+        }
+    }
+
     // ---------- Profiles ----------
+    static readonly HashSet<string> Hidden = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ApplicationFrameHost", "TextInputHost", "explorer", "SystemSettings", "ShellExperienceHost", "StartMenuExperienceHost",
+        "SearchHost", "LockApp", "XboxPcApp", "GameBar", "Widgets", "dwm", "taskmgr", "Syntra",
+    };
+
     Control BuildProfiles()
     {
         var page = Ui.Page();
         page.Controls.Add(Ui.Header("Profiles", "A look for each game — applied when it's in front, put back when you leave it."));
 
-        var pick = Ui.Card("Pick a game", "Running programs with a window. Syntra only looks at the program's name.");
-        var procs = Process.GetProcesses()
-            .Where(p => { try { return p.MainWindowHandle != IntPtr.Zero && p.Id != Environment.ProcessId; } catch { return false; } })
-            .Select(p => p.ProcessName).Where(n => !Hidden.Contains(n))
-            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-        var combo = Ui.Combo(procs, 300);
+        var pick = Ui.Card("Pick a game", "Open programs. Syntra only looks at the program's name.");
+        var combo = Ui.Combo(WindowApps(), 300);
         pick.Controls.Add(combo);
         pick.Controls.Add(Ui.Btn("Save current look for this game", () =>
         {
@@ -501,11 +664,149 @@ class MainForm : Form
         return page;
     }
 
-    static readonly HashSet<string> Hidden = new(StringComparer.OrdinalIgnoreCase)
+    // ---------- Customize ----------
+    void LoadBackground()
     {
-        "ApplicationFrameHost", "TextInputHost", "explorer", "SystemSettings", "ShellExperienceHost", "StartMenuExperienceHost",
-        "SearchHost", "LockApp", "XboxPcApp", "GameBar", "Widgets", "dwm", "taskmgr", "Syntra",
-    };
+        PageFlow.Background?.Dispose();
+        PageFlow.Background = null;
+        PageFlow.Dim = S.BackgroundDim;
+        PageFlow.ClearCache();
+        if (S.BackgroundPath == "" || !File.Exists(S.BackgroundPath)) return;
+        try
+        {
+            using var ms = new MemoryStream(File.ReadAllBytes(S.BackgroundPath));
+            using var img = Image.FromStream(ms);
+            PageFlow.Background = new Bitmap(img);
+        }
+        catch { }
+    }
+
+    void UseTheme(ThemePreset t)
+    {
+        Theme.Use(t);
+        S.AppTheme = Theme.Current.Clone();
+        S.Save();
+        ApplyThemeColours();
+        Show(currentPage);
+    }
+
+    Control BuildCustomize()
+    {
+        var page = Ui.Page();
+        page.Controls.Add(Ui.Header("Customize", "How Syntra itself looks. Game colours are set on Display."));
+
+        var themes = Ui.Card("Theme", $"Now: {Theme.Current.Name}");
+        foreach (var t in Theme.Presets)
+        {
+            var tt = t;
+            var tile = new ThemeTile(t, t.Name == Theme.Current.Name);
+            tile.Click += (_, _) => UseTheme(tt);
+            themes.Controls.Add(tile);
+        }
+        page.Controls.Add(themes);
+
+        var own = Ui.Card("Make it yours", "Pick your own accent colour, or share themes as small .json files.");
+        own.Controls.Add(Ui.Btn("Accent colour…", () =>
+        {
+            using var d = new ColorDialog { Color = Theme.Accent, FullOpen = true };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            var t = Theme.Current.Clone();
+            t.Name = "Custom";
+            t.Accent = Theme.Hex(d.Color);
+            t.AccentText = d.Color.GetBrightness() > 0.55f ? "#000000" : "#FFFFFF";
+            UseTheme(t);
+        }));
+        own.Controls.Add(Ui.Btn("Panel colour…", () =>
+        {
+            using var d = new ColorDialog { Color = Theme.Card, FullOpen = true };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            var t = Theme.Current.Clone();
+            t.Name = "Custom";
+            t.Card = Theme.Hex(d.Color);
+            t.Hover = Theme.Hex(Theme.Mix(d.Color, Color.White, 0.08));
+            t.Border = Theme.Hex(Theme.Mix(d.Color, Color.White, 0.14));
+            t.Side = Theme.Hex(Theme.Mix(d.Color, Color.Black, 0.5));
+            t.Bg = Theme.Hex(Theme.Mix(d.Color, Color.Black, 0.65));
+            UseTheme(t);
+        }));
+        own.Controls.Add(Ui.Btn("Import theme…", () =>
+        {
+            using var d = new OpenFileDialog { Filter = "Syntra theme (*.json)|*.json" };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            try { UseTheme(AppSettings.FromJson<ThemePreset>(File.ReadAllText(d.FileName)) ?? throw new Exception()); }
+            catch { MessageBox.Show(this, "That file isn't a Syntra theme.", "Syntra"); }
+        }));
+        own.Controls.Add(Ui.Btn("Export theme…", () =>
+        {
+            using var d = new SaveFileDialog { Filter = "Syntra theme (*.json)|*.json", FileName = $"{Theme.Current.Name}.json" };
+            if (d.ShowDialog(this) == DialogResult.OK) File.WriteAllText(d.FileName, AppSettings.ToJson(Theme.Current));
+        }));
+        page.Controls.Add(own);
+
+        var bg = Ui.Card("Background picture", S.BackgroundPath == "" ? "No picture. The window is plain." : "Your picture shows around the panels. Only you see it; nothing is uploaded.");
+        bg.Controls.Add(Ui.Btn("Choose PNG / JPG…", () =>
+        {
+            using var d = new OpenFileDialog { Filter = "Pictures (*.png;*.jpg;*.jpeg;*.bmp)|*.png;*.jpg;*.jpeg;*.bmp" };
+            if (d.ShowDialog(this) != DialogResult.OK) return;
+            try
+            {
+                Directory.CreateDirectory(AppSettings.Dir);
+                var dest = Path.Combine(AppSettings.Dir, "background" + Path.GetExtension(d.FileName).ToLowerInvariant());
+                PageFlow.Background?.Dispose(); PageFlow.Background = null;
+                File.Copy(d.FileName, dest, true);
+                S.BackgroundPath = dest; S.Save();
+                LoadBackground(); Show("Customize");
+            }
+            catch (Exception ex) { MessageBox.Show(this, "Couldn't use that picture: " + ex.Message, "Syntra"); }
+        }, true));
+        if (S.BackgroundPath != "")
+            bg.Controls.Add(Ui.Btn("Remove", () => { S.BackgroundPath = ""; S.Save(); LoadBackground(); Show("Customize"); }));
+        var dim = new DarkSlider("Dim the picture", 0, 90, S.BackgroundDim, 45, 400) { Format = v => $"{v:0}%" };
+        dim.Changed += v => { S.BackgroundDim = (int)v; PageFlow.Dim = (int)v; };
+        dim.Released += () => { S.Save(); Show("Customize"); };
+        bg.Controls.Add(dim);
+        page.Controls.Add(bg);
+
+        var win = Ui.Card("Window");
+        var op = new DarkSlider("See-through window", 60, 100, S.WindowOpacity, 100, 400) { Format = v => $"{v:0}%" };
+        op.Changed += v => { S.WindowOpacity = (int)v; Opacity = v / 100.0; };
+        op.Released += () => S.Save();
+        win.Controls.Add(op);
+        page.Controls.Add(win);
+        return page;
+    }
+
+    sealed class ThemeTile : Control
+    {
+        readonly ThemePreset t; readonly bool sel; bool hover;
+        public ThemeTile(ThemePreset preset, bool selected)
+        {
+            t = preset; sel = selected;
+            Size = new Size(200, 92); Margin = new Padding(5); Cursor = Cursors.Hand;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); }
+        static Color C(string h) { try { return ColorTranslator.FromHtml(h); } catch { return Color.Black; } }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Theme.Card);
+            var r = new RectangleF(1, 1, Width - 3, Height - 3);
+            using (var path = Gfx.Round(r, 12))
+            {
+                using (var b = new SolidBrush(C(t.Bg))) g.FillPath(b, path);
+                using var p = new Pen(sel ? Theme.Accent : hover ? Theme.Muted : Theme.Border, sel ? 2 : 1);
+                g.DrawPath(p, path);
+            }
+            using (var side = new SolidBrush(C(t.Side))) using (var sp = Gfx.Round(new RectangleF(8, 8, 22, Height - 18), 6)) g.FillPath(side, sp);
+            using (var ab = new SolidBrush(C(t.Accent))) using (var ap = Gfx.Round(new RectangleF(11, 12, 16, 16), 4)) g.FillPath(ab, ap);
+            using (var cb = new SolidBrush(C(t.Card))) using (var cp = Gfx.Round(new RectangleF(36, 8, Width - 46, 38), 6)) g.FillPath(cb, cp);
+            using (var ab = new SolidBrush(C(t.Accent))) using (var lp = Gfx.Round(new RectangleF(44, 30, 60, 5), 2.5f)) g.FillPath(ab, lp);
+            TextRenderer.DrawText(g, t.Name, Theme.H2, new Point(38, Height - 36), Color.White);
+        }
+    }
 
     // ---------- Settings ----------
     Control BuildSettings()
@@ -514,14 +815,33 @@ class MainForm : Form
         page.Controls.Add(Ui.Header("Settings", "How Syntra itself behaves."));
 
         var gen = Ui.Card();
-        gen.Controls.Add(Ui.Toggle("Launch with Windows (starts in the tray and puts your look back)", Startup.IsOn(), v => Startup.Set(v)));
+        gen.Controls.Add(Ui.Toggle("Launch with Windows", Startup.IsOn(), v => Startup.Set(v)));
+        gen.Controls.Add(Ui.Toggle("Update by itself", S.AutoUpdate, v => { S.AutoUpdate = v; S.Save(); }));
+        gen.Controls.Add(Ui.Lbl($"Version {Updater.Current} · {Updater.LastStatus}", Theme.Body, Theme.Muted, Ui.PageW - 40));
+        gen.Controls.Add(Ui.Btn("Check for updates now", async () =>
+        {
+            var tag = await Updater.CheckAsync();
+            if (tag != null) Updater.Restart(tray: false); else Show("Settings");
+        }));
         gen.Controls.Add(Ui.Lbl("Quick on/off shortcut:  Ctrl + Alt + V", Theme.Body, Theme.Text, Ui.PageW - 40));
-        gen.Controls.Add(Ui.Lbl($"NVIDIA driver vibrance: {(ColorEngine.HasDriverVibrance ? "found" : "not found — software saturation is used")}", Theme.Body, Theme.Muted, Ui.PageW - 40));
-        gen.Controls.Add(Ui.Lbl($"Running as administrator: {(Program.IsAdmin ? "yes" : "no (normal)")}", Theme.Body, Theme.Muted, Ui.PageW - 40));
-        gen.Controls.Add(Ui.Btn("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); S.Save(); }));
+        gen.Controls.Add(Ui.Lbl($"NVIDIA driver vibrance: {(ColorEngine.HasDriverVibrance ? "found" : "not found — software saturation is used")}   ·   Running as admin: {(Program.IsAdmin ? "yes" : "no (normal)")}", Theme.Body, Theme.Muted, Ui.PageW - 40));
+        gen.Controls.Add(Ui.Btn("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); UpdateHueOverlay(); S.Save(); }));
         gen.Controls.Add(Ui.Btn("Repair: restart as admin", () => Startup.RestartAsAdmin()));
-        gen.Controls.Add(Ui.Lbl("Only use Repair if colours won't apply. Windows asks you first.", Theme.Body, Theme.Muted, Ui.PageW - 40));
         page.Controls.Add(gen);
+
+        var acc = Account.Load();
+        if (AccountConfig.Enabled)
+        {
+            var a = Ui.Card("Account", acc.SignedIn ? $"{acc.Username} · {acc.Email}" : "Not signed in.");
+            a.Controls.Add(Ui.Btn(acc.SignedIn ? "Sign out" : "Sign in", () =>
+            {
+                Account.SignOut();
+                using var f = new AccountForm();
+                f.ShowDialog(this);
+                Show("Settings");
+            }));
+            page.Controls.Add(a);
+        }
 
         var promise = Ui.Card("What Syntra never does", null);
         foreach (var line in new[]
@@ -539,7 +859,8 @@ class MainForm : Form
         string hash;
         try { using var fs = File.OpenRead(Environment.ProcessPath!); hash = Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant(); }
         catch { hash = "unavailable"; }
-        var hb = new TextBox { Text = hash, ReadOnly = true, Width = 560, BackColor = Theme.Bg, ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, Font = new Font("Consolas", 9.5f) };
+        var hb = new DarkInput("", 600);
+        hb.Box.Text = hash; hb.Box.ReadOnly = true; hb.Box.Font = new Font("Consolas", 9.5f);
         verify.Controls.Add(hb);
         verify.Controls.Add(Ui.Btn("Copy", () => Clipboard.SetText(hash)));
         page.Controls.Add(verify);
@@ -550,15 +871,16 @@ class MainForm : Form
     {
         using var f = new Form
         {
-            Text = title, Size = new Size(360, 160), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
+            Text = title, Size = new Size(380, 190), StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false, MinimizeBox = false, BackColor = Theme.Card, ForeColor = Theme.Text, Font = Theme.Body,
         };
         Ui.DarkTitle(f);
-        var l = new Label { Text = text, Location = new Point(14, 14), AutoSize = true };
-        var tb = new TextBox { Text = def, Location = new Point(14, 40), Width = 315, BackColor = Theme.Bg, ForeColor = Theme.Text };
-        var ok = new Button { Text = "Save", DialogResult = DialogResult.OK, Location = new Point(244, 76), Size = new Size(85, 30), FlatStyle = FlatStyle.Flat };
+        var l = new Label { Text = text, Location = new Point(16, 14), AutoSize = true };
+        var tb = new DarkInput("", 330) { Location = new Point(14, 40) };
+        tb.Box.Text = def;
+        var ok = new RoundButton { Text = "Save", Primary = true, DialogResult = DialogResult.OK, Location = new Point(250, 92), Size = new Size(94, 38) };
         f.Controls.AddRange(new Control[] { l, tb, ok });
         f.AcceptButton = ok;
-        return f.ShowDialog() == DialogResult.OK ? tb.Text : null;
+        return f.ShowDialog() == DialogResult.OK ? tb.Box.Text : null;
     }
 }

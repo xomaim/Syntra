@@ -8,9 +8,13 @@ static class ColorEngine
 {
     static bool magOk;
     static NvVibrance? nv;
+    static float[]? lastEffect;
+    static ushort[]? lastRamp;
+    static int lastNv = -1;
     public static bool HasDriverVibrance => nv != null;
     public static bool HasMatrix => magOk;
     public static string LastError = "";
+    static readonly double[] Lum = { 0.2126, 0.7152, 0.0722 };
 
     public static void Init()
     {
@@ -18,39 +22,73 @@ static class ColorEngine
         nv = NvVibrance.TryCreate();
     }
 
-    public static void Apply(Look l, double lowBlue)
+    // Row-vector convention: out = in * M (what the Magnification API uses).
+    public static double[,] SatMatrix(double s)
     {
-        double sat = l.Saturation / 100.0;
+        var m = new double[3, 3];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) m[i, j] = (1 - s) * Lum[i] + (i == j ? s : 0);
+        return m;
+    }
+
+    public static double[,] HueMatrix(double deg)
+    {
+        double a = deg * Math.PI / 180, c = Math.Cos(a), s = Math.Sin(a);
+        double[,] k =
+        {
+            { 0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928 },
+            { 0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283 },
+            { 0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072 },
+        };
+        var m = new double[3, 3];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) m[i, j] = k[j, i];
+        return m;
+    }
+
+    public static double[,] Mul(double[,] a, double[,] b)
+    {
+        var m = new double[3, 3];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++)
+            m[i, j] = a[i, 0] * b[0, j] + a[i, 1] * b[1, j] + a[i, 2] * b[2, j];
+        return m;
+    }
+
+    public static float[] Effect(double[,] m, double offset = 0)
+    {
+        var e = new float[25];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) e[i * 5 + j] = (float)m[i, j];
+        e[18] = 1;
+        for (int j = 0; j < 3; j++) e[20 + j] = (float)offset;
+        e[24] = 1;
+        return e;
+    }
+
+    // hue/hueSat: whole-screen hue changer (0 / 1 when off).
+    public static void Apply(Look l, double lowBlue, double hue = 0, double hueSat = 1, bool forceRamp = false)
+    {
+        double sat = l.Saturation / 100.0 * hueSat;
         double vib = l.Vibrance;
         if (nv != null)
         {
-            nv.Set(Math.Max(0, (vib - 50) / 50.0));
+            int lvl = (int)Math.Round(Math.Max(0, (vib - 50) / 50.0) * 1000);
+            if (lvl != lastNv) { nv.Set(lvl / 1000.0); lastNv = lvl; }
             if (vib < 50) sat *= vib / 50.0;
         }
-        else
-        {
-            sat *= vib >= 50 ? 1 + (vib - 50) / 50.0 * 0.6 : vib / 50.0;
-        }
+        else sat *= vib >= 50 ? 1 + (vib - 50) / 50.0 * 0.6 : vib / 50.0;
 
         double temp = Math.Clamp(l.Temperature + lowBlue, -100, 100) / 100.0;
-        double gr, gg, gb;
-        if (temp >= 0) { gr = 1; gg = 1 - 0.12 * temp; gb = 1 - 0.40 * temp; }
-        else { gr = 1 + 0.35 * temp; gg = 1 + 0.10 * temp; gb = 1; }
-        double[] gains = { gr, gg, gb };
-
+        double[] gains = temp >= 0 ? new[] { 1, 1 - 0.12 * temp, 1 - 0.40 * temp } : new[] { 1 + 0.35 * temp, 1 + 0.10 * temp, 1 };
         double c = l.Contrast / 100.0, b = l.Brightness / 100.0;
-        double[] lum = { 0.2126, 0.7152, 0.0722 };
 
-        var m = new float[25];
-        for (int i = 0; i < 3; i++)
-            for (int j = 0; j < 3; j++)
-                m[i * 5 + j] = (float)(((1 - sat) * lum[i] + (i == j ? sat : 0)) * gains[j] * c * b);
-        m[3 * 5 + 3] = 1;
-        for (int j = 0; j < 3; j++) m[4 * 5 + j] = (float)(0.5 * (1 - c));
-        m[4 * 5 + 4] = 1;
+        var m = Mul(HueMatrix(hue), SatMatrix(sat));
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) m[i, j] *= gains[j] * c * b;
+        var eff = Effect(m, 0.5 * (1 - c));
 
-        if (magOk) try { Native.MagSetFullscreenColorEffect(m); } catch { }
-        SetRamp(BuildRamp(l));
+        if (magOk && (lastEffect == null || !eff.AsSpan().SequenceEqual(lastEffect)))
+        {
+            try { Native.MagSetFullscreenColorEffect(eff); lastEffect = eff; } catch { }
+        }
+        var ramp = BuildRamp(l);
+        if (forceRamp || lastRamp == null || !ramp.AsSpan().SequenceEqual(lastRamp)) { SetRamp(ramp); lastRamp = ramp; }
     }
 
     static ushort[] BuildRamp(Look l)
@@ -62,10 +100,10 @@ static class ColorEngine
         {
             double x = i / 255.0;
             x = Math.Pow(x, 1.0 / g);
-            x += sh * 0.30 * x * Math.Pow(1 - x, 2) * 2;     // lift / crush shadows
-            x += hi * 0.30 * Math.Pow(x, 2) * (1 - x) * 2;   // lift / pull highlights
-            x = bl * 0.08 + x * (1 - bl * 0.08);              // raise blacks floor
-            x *= 1 + wh * 0.10;                               // whites
+            x += sh * 0.30 * x * Math.Pow(1 - x, 2) * 2;
+            x += hi * 0.30 * Math.Pow(x, 2) * (1 - x) * 2;
+            x = bl * 0.08 + x * (1 - bl * 0.08);
+            x *= 1 + wh * 0.10;
             x = Math.Clamp(x, 0, 1);
             ushort v = (ushort)Math.Round(x * 65535);
             r[i] = r[256 + i] = r[512 + i] = v;
@@ -99,6 +137,7 @@ static class ColorEngine
         if (magOk) try { Native.MagSetFullscreenColorEffect(id); } catch { }
         SetRamp(LinearRamp());
         nv?.Restore();
+        lastEffect = null; lastRamp = null; lastNv = -1;
     }
 
     public static void Shutdown()

@@ -59,8 +59,17 @@ public class AppSettings
     public bool Enabled { get; set; } = true;
     public double LowBlue { get; set; } = 0;
     public CrosshairSettings Crosshair { get; set; } = new();
+    public bool HueOn { get; set; }
+    public double HueDegrees { get; set; } = 0;
+    public double HueSat { get; set; } = 100;
+    public string HueTarget { get; set; } = "";       // "" = whole screen, else a program name
+    public ThemePreset? AppTheme { get; set; }
+    public string BackgroundPath { get; set; } = "";
+    public int BackgroundDim { get; set; } = 45;
+    public int WindowOpacity { get; set; } = 100;
+    public bool AutoUpdate { get; set; } = true;
 
-    static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Syntra");
+    public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Syntra");
     static string FilePath => Path.Combine(Dir, "settings.json");
     static readonly JsonSerializerOptions Opts = new() { WriteIndented = true };
 

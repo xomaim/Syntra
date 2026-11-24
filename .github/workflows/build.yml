@@ -19,7 +19,7 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Publish single-file exe
-        run: dotnet publish src/Syntra.csproj -c Release -o out
+        run: dotnet publish src/Syntra.csproj -c Release -o out -p:Version=1.0.${{ github.run_number }}
 
       - name: Show result
         shell: bash
@@ -39,10 +39,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           SHA=$(cut -d' ' -f1 out/sha.txt)
+          TAG="v1.0.${{ github.run_number }}"
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest out/Syntra.exe \
-            --title "Syntra (latest build)" \
-            --notes "Download **Syntra.exe** below and run it. Nothing else to install.
+          gh release create "$TAG" out/Syntra.exe \
+            --title "Syntra $TAG" \
+            --notes "Download **Syntra.exe** below and run it. Nothing else to install. Syntra updates itself after this.
 
           SHA-256: \`$SHA\`
           Built from commit ${GITHUB_SHA::7}." \

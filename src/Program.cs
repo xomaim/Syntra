@@ -13,8 +13,13 @@ static class Program
     static void Main(string[] args)
     {
         using var mutex = new Mutex(true, @"Local\Syntra.SingleInstance", out bool first);
-        bool repair = args.Contains("--repair");
-        if (!first && !repair) return; // already running — it's in the tray
+        bool repair = args.Contains("--repair"), updated = args.Contains("--updated");
+        if (!first)
+        {
+            if (!repair && !updated) return; // already running — it's in the tray
+            try { mutex.WaitOne(15000); } catch (AbandonedMutexException) { }
+        }
+        Updater.CleanupOld();
 
         try { using var id = WindowsIdentity.GetCurrent(); IsAdmin = new WindowsPrincipal(id).IsInRole(WindowsBuiltInRole.Administrator); } catch { }
 
@@ -23,6 +28,15 @@ static class Program
         Application.SetCompatibleTextRenderingDefault(false);
 
         Settings = AppSettings.Load();
+        if (Settings.AppTheme != null) Theme.Use(Settings.AppTheme);
+
+        // First run: make an account (email + code). Skipped until the email service is set up.
+        if (AccountConfig.Enabled && !Account.Load().SignedIn)
+        {
+            using var acc = new AccountForm();
+            if (acc.ShowDialog() != DialogResult.OK) return;
+        }
+
         ColorEngine.Init();
 
         // Always give the screen back, even after a crash.
