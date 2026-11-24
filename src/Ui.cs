@@ -315,7 +315,12 @@ static class Bg
         }
         Point off;
         try { off = Root.PointToClient(c.PointToScreen(Point.Empty)); } catch { return false; }
-        g.DrawImageUnscaled(cache, -off.X, -off.Y);
+        var state = g.Save();
+        g.InterpolationMode = InterpolationMode.NearestNeighbor;
+        g.PixelOffsetMode = PixelOffsetMode.Half;
+        g.SmoothingMode = SmoothingMode.None;
+        g.DrawImage(cache, new Rectangle(-off.X, -off.Y, cache.Width, cache.Height), 0, 0, cache.Width, cache.Height, GraphicsUnit.Pixel);
+        g.Restore(state);
         if (tint > 0) using (var t = new SolidBrush(Color.FromArgb(tint, Theme.Side))) g.FillRectangle(t, 0, 0, c.Width, c.Height);
         return true;
     }
@@ -672,11 +677,22 @@ class NavIcon : Control
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         if (!Bg.Paint(g, this, Bg.SideTint)) g.Clear(Theme.Side);
-        if (selected || hover)
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        var tile = new RectangleF(2, 2, Width - 4, Height - 4);
+        if (selected)
         {
-            using var b = new SolidBrush(selected ? Theme.Accent : Theme.Hover);
-            using var path = Gfx.Round(new RectangleF(0, 0, Width - 1, Height - 1), 13);
+            using var b = new SolidBrush(Theme.Accent);
+            using var path = Gfx.Round(tile, 12);
             g.FillPath(b, path);
+        }
+        else if (hover)
+        {
+            using var b = new SolidBrush(Color.FromArgb(150, Theme.Hover));
+            using var p = new Pen(Color.FromArgb(120, Theme.Mix(Theme.Border, Color.White, 0.2)));
+            using var path = Gfx.Round(tile, 12);
+            g.FillPath(b, path);
+            g.DrawPath(p, path);
         }
         var col = selected ? Theme.AccentText : hover ? Color.White : Color.FromArgb(185, 185, 190);
         Draw(g, Kind, col, Width / 2f, Height / 2f);
@@ -846,15 +862,12 @@ class CrosshairPreview : Control
         var r = new RectangleF(0, 0, Width - 1, Height - 1);
         using var clip = Gfx.Round(r, 14);
         g.SetClip(clip);
-        using (var sky = new LinearGradientBrush(r, Color.FromArgb(70, 110, 150), Color.FromArgb(170, 185, 195), 90f)) g.FillRectangle(sky, r);
-        using (var hill = new SolidBrush(Color.FromArgb(70, 95, 60)))
-        {
-            g.FillEllipse(hill, -60, Height * 0.55f, Width * 0.8f, Height);
-            g.FillEllipse(hill, Width * 0.35f, Height * 0.6f, Width * 0.9f, Height);
-        }
-        using (var ground = new SolidBrush(Color.FromArgb(95, 85, 60))) g.FillRectangle(ground, 0, Height * 0.8f, Width, Height * 0.2f);
-        using (var house = new SolidBrush(Color.FromArgb(60, 55, 50)))
-            g.FillRectangle(house, Width * 0.62f, Height * 0.48f, 46, 40);
+        const int sq = 14;
+        using (var a = new SolidBrush(Color.FromArgb(58, 60, 66)))
+        using (var b2 = new SolidBrush(Color.FromArgb(44, 46, 51)))
+            for (int y = 0; y < Height; y += sq)
+                for (int x = 0; x < Width; x += sq)
+                    g.FillRectangle(((x / sq + y / sq) & 1) == 0 ? a : b2, x, y, sq, sq);
         g.ResetClip();
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using (var pen = new Pen(Theme.Border)) g.DrawPath(pen, clip);

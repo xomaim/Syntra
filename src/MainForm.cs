@@ -872,8 +872,36 @@ class MainForm : Form
         hb.Box.Text = hash; hb.Box.ReadOnly = true; hb.Box.Font = new Font("Consolas", 9.5f);
         verify.Controls.Add(hb);
         verify.Controls.Add(Ui.Btn("Copy", () => Clipboard.SetText(hash)));
+        verify.Controls.Add(Ui.Btn("Check on VirusTotal ↗", () =>
+        {
+            try { Process.Start(new ProcessStartInfo($"https://www.virustotal.com/gui/file/{hash}") { UseShellExecute = true }); } catch { }
+        }, true));
+        var official = Ui.Lbl("Checking this copy against the official GitHub release…", Theme.Body, Theme.Muted, Ui.PageW - 40);
+        verify.Controls.Add(official);
+        _ = CheckOfficial(hash, official);
         page.Controls.Add(verify);
         return page;
+    }
+
+    // Compares the running file's SHA-256 with the one GitHub Actions published for this version.
+    static async Task CheckOfficial(string hash, Label result)
+    {
+        string text; Color col;
+        try
+        {
+            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("Syntra");
+            var json = await http.GetStringAsync($"https://api.github.com/repos/{Updater.Repo}/releases/tags/v{Updater.Current}");
+            var body = System.Text.Json.Nodes.JsonNode.Parse(json)?["body"]?.ToString() ?? "";
+            var m = System.Text.RegularExpressions.Regex.Match(body, "[0-9a-fA-F]{64}");
+            if (!m.Success) { text = "No official fingerprint found for this version."; col = Theme.Muted; }
+            else if (string.Equals(m.Value, hash, StringComparison.OrdinalIgnoreCase))
+            { text = $"✓  Legit — this is the official Syntra v{Updater.Current} built by GitHub."; col = Theme.Good; }
+            else { text = "✗  This file does NOT match the official release. Download Syntra again from GitHub."; col = Theme.Warn; }
+        }
+        catch { text = "Couldn't reach GitHub to check right now."; col = Theme.Muted; }
+        if (result.IsDisposed) return;
+        result.Text = text; result.ForeColor = col;
     }
 
     static string? Prompt(string title, string text, string def)

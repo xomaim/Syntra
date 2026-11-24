@@ -42,7 +42,7 @@ sealed class HueOverlay : Form
     readonly List<IntPtr> hooks = new();
     bool moving;
     RECT lastRect;
-    int failures;
+
 
     static readonly IntPtr PerMonitorV2 = new(-4);
     readonly System.Windows.Forms.Timer tick = new() { Interval = 16 };
@@ -63,12 +63,12 @@ sealed class HueOverlay : Form
         var old = SetThreadDpiAwarenessContext(PerMonitorV2);
         try { CreateHandle(); } finally { SetThreadDpiAwarenessContext(old); }
         proc = OnWinEvent;
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, proc, 0, 0, 0));
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, IntPtr.Zero, proc, 0, 0, 0));
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, proc, 0, 0, 0));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, IntPtr.Zero, proc, 0, 0, 0));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, proc, 0, 0, 0));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, IntPtr.Zero, proc, 0, 0, 0));
+        hooks.Add(SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, proc, 0, 0, 2));
+        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, IntPtr.Zero, proc, 0, 0, 2));
+        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, proc, 0, 0, 2));
+        hooks.Add(SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, IntPtr.Zero, proc, 0, 0, 2));
+        hooks.Add(SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, proc, 0, 0, 2));
+        hooks.Add(SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, IntPtr.Zero, proc, 0, 0, 2));
         tick.Tick += (_, _) => Follow();
         tick.Start();
     }
@@ -155,13 +155,8 @@ sealed class HueOverlay : Form
                 lastRect = r;
                 shown = true;
             }
-            if (!MagSetWindowSource(mag, r))
-            {
-                // The magnifier sometimes dies (display change, sleep, driver reset). Rebuild it.
-                if (++failures > 3) { failures = 0; MakeMag(); lastRect = default; }
-            }
-            else failures = 0;
-            InvalidateRect(mag, IntPtr.Zero, false);
+            MagSetWindowSource(mag, r);
+            InvalidateRect(mag, IntPtr.Zero, true);
         }
         finally { SetThreadDpiAwarenessContext(old); }
     }
