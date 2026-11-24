@@ -108,7 +108,9 @@ sealed class HueOverlay : Form
         mag = CreateWindowEx(0, "Magnifier", "SyntraHue", 0x40000000 | 0x10000000, 0, 0, 1, 1, Handle, IntPtr.Zero, GetModuleHandle(null), IntPtr.Zero);
         if (mag == IntPtr.Zero) return;
         MagSetWindowTransform(mag, new float[] { 1, 0, 0, 0, 1, 0, 0, 0, 1 });
-        MagSetWindowFilterList(mag, 0, 1, new[] { Handle });
+        var mine = new List<IntPtr> { Handle };
+        foreach (Form f in Application.OpenForms) if (f != this && f.IsHandleCreated) mine.Add(f.Handle);
+        MagSetWindowFilterList(mag, 0, mine.Count, mine.ToArray());
         MagSetColorEffect(mag, effect);
     }
 
@@ -143,6 +145,17 @@ sealed class HueOverlay : Form
 
     static bool Cloaked(IntPtr h) => DwmGetInt(h, 14, out var c, 4) == 0 && c != 0;
 
+    // Skip Discord's (or any app's) invisible always-on-top overlay windows — only the real app window counts.
+    static bool IsNormalWindow(IntPtr h)
+    {
+        int ex = GetWindowLong(h, -20);
+        const int TOPMOST = 0x8, TRANSPARENT = 0x20, TOOL = 0x80, NOACTIVATE = 0x08000000;
+        if ((ex & (TOPMOST | TRANSPARENT | TOOL | NOACTIVATE)) != 0) return false;
+        if (Cloaked(h)) return false;
+        GetWindowRect(h, out var r);
+        return r.R - r.L >= 200 && r.B - r.T >= 150;
+    }
+
     bool IsTargetWindow(IntPtr h)
     {
         if (!IsWindow(h)) return false;
@@ -153,7 +166,7 @@ sealed class HueOverlay : Form
     // The app's main window: its biggest visible, titled, top-level window.
     IntPtr FindTarget()
     {
-        if (target != IntPtr.Zero && IsTargetWindow(target)) return target;
+        if (target != IntPtr.Zero && IsTargetWindow(target) && IsNormalWindow(target)) return target;
         target = IntPtr.Zero;
         if (DateTime.UtcNow - lastScan < TimeSpan.FromSeconds(1)) return IntPtr.Zero;
         lastScan = DateTime.UtcNow;
@@ -161,7 +174,7 @@ sealed class HueOverlay : Form
         EnumWindows((h, _) =>
         {
             if (!IsWindowVisible(h) || GetWindow(h, GW_OWNER) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
-            if ((GetWindowLong(h, -20) & 0x80) != 0 || Cloaked(h)) return true; // tool windows / hidden
+            if (!IsNormalWindow(h)) return true;
             if (!IsTargetWindow(h)) return true;
             GetWindowRect(h, out var r);
             long area = (long)(r.R - r.L) * (r.B - r.T);
@@ -188,6 +201,8 @@ sealed class HueOverlay : Form
             // Sit directly above the app in the window stack — not on top of everything.
             // Windows you put over the app still cover it normally.
             var above = GetWindow(t, GW_HWNDPREV);
+            if (above != Handle && above != IntPtr.Zero && (GetWindowLong(above, -20) & 0x8) != 0) above = IntPtr.Zero; // app is just under the always-on-top band
+            if ((GetWindowLong(Handle, -20) & 0x8) != 0) Native.SetWindowPos(Handle, new IntPtr(-2), 0, 0, 0, 0, 0x0001u | 0x0002u | 0x0010u); // drop topmost if Windows gave it
             bool moved = r.L != lastRect.L || r.T != lastRect.T || r.R != lastRect.R || r.B != lastRect.B;
             if (!shown || moved || above != Handle)
             {
