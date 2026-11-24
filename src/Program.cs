@@ -63,8 +63,15 @@ static class Program
         Settings = AppSettings.Load();
         if (Settings.AppTheme != null) Theme.Use(Settings.AppTheme);
 
-        // First run: make an account (email + code). Skipped until the email service is set up.
-        if (AccountConfig.Enabled && !Account.Load().SignedIn)
+        // First run: accept the terms, then sign up / log in.
+        if (!Settings.TermsAccepted)
+        {
+            using var terms = new TermsForm();
+            if (terms.ShowDialog() != DialogResult.OK) return;
+            Settings.TermsAccepted = true;
+            Settings.Save();
+        }
+        if (!Account.Load().LoggedIn)
         {
             using var acc = new AccountForm();
             if (acc.ShowDialog() != DialogResult.OK) return;

@@ -68,6 +68,7 @@ public class AppSettings
     public int BackgroundDim { get; set; } = 45;
     public int WindowOpacity { get; set; } = 100;
     public bool AutoUpdate { get; set; } = true;
+    public bool TermsAccepted { get; set; }
 
     public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Syntra");
     static string FilePath => Path.Combine(Dir, "settings.json");

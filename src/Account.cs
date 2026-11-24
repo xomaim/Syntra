@@ -1,27 +1,20 @@
-using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace Syntra;
 
-// Email sign-up with a 6-digit code, using Supabase Auth (it sends the email).
-// Fill these two in with your Supabase project's URL and "anon public" key.
-// The anon key is designed to be public, so it is safe inside the .exe.
-static class AccountConfig
-{
-    public const string SupabaseUrl = "";
-    public const string AnonKey = "";
-    public static bool Enabled => SupabaseUrl.Length > 0 && AnonKey.Length > 0;
-}
-
+// Account stored on this PC. The password is never saved — only a salted PBKDF2 hash of it.
 public class Account
 {
-    public string Email { get; set; } = "";
+    public string Name { get; set; } = "";
     public string Username { get; set; } = "";
-    public string RefreshToken { get; set; } = "";
+    public string Salt { get; set; } = "";
+    public string Hash { get; set; } = "";
+    public bool LoggedIn { get; set; }
     public DateTime Since { get; set; }
-    public bool SignedIn => Email.Length > 0 && RefreshToken.Length > 0;
 
+    public bool Exists => Username.Length > 0 && Hash.Length > 0;
     static string FilePath => Path.Combine(AppSettings.Dir, "account.json");
 
     public static Account Load()
@@ -35,155 +28,161 @@ public class Account
         try { Directory.CreateDirectory(AppSettings.Dir); File.WriteAllText(FilePath, JsonSerializer.Serialize(this)); } catch { }
     }
 
-    public static void SignOut() { try { File.Delete(FilePath); } catch { } }
+    static string HashOf(string password, byte[] salt) =>
+        Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(Encoding.UTF8.GetBytes(password), salt, 200_000, HashAlgorithmName.SHA256, 32));
+
+    public void SetPassword(string password)
+    {
+        var salt = RandomNumberGenerator.GetBytes(16);
+        Salt = Convert.ToBase64String(salt);
+        Hash = HashOf(password, salt);
+    }
+
+    public bool Check(string password)
+    {
+        try { return CryptographicOperations.FixedTimeEquals(Convert.FromBase64String(HashOf(password, Convert.FromBase64String(Salt))), Convert.FromBase64String(Hash)); }
+        catch { return false; }
+    }
 }
 
-static class Auth
+// Small terms window (320 × 186). You must accept to use Syntra.
+sealed class TermsForm : Form
 {
-    static readonly HttpClient http = new() { Timeout = TimeSpan.FromSeconds(25) };
+    const string Terms =
+        "SYNTRA — TERMS OF USE\r\n\r\n" +
+        "1. Syntra changes what your monitor shows: colour, gamma, resolution and an overlay crosshair. It never reads a game's memory, never changes a game's files, never puts code into a game or any other program, and installs no driver.\r\n\r\n" +
+        "2. Some games have their own rules about screen tools and overlays. You are responsible for following the rules of the games you play. Any ban risk is yours.\r\n\r\n" +
+        "3. Syntra is provided \"as is\", without warranty of any kind. The authors are not liable for any damage, data loss, bans or other problems from using it.\r\n\r\n" +
+        "4. Your settings and account stay on this PC. Syntra contacts GitHub only to check for and download updates.\r\n\r\n" +
+        "5. Don't resell Syntra or pass off a modified copy as the official one.\r\n\r\n" +
+        "6. These terms may change with updates. Using a new version means you accept its terms.";
 
-    static HttpRequestMessage Req(string path, object body)
+    public TermsForm()
     {
-        var r = new HttpRequestMessage(HttpMethod.Post, AccountConfig.SupabaseUrl.TrimEnd('/') + path) { Content = JsonContent.Create(body) };
-        r.Headers.Add("apikey", AccountConfig.AnonKey);
-        r.Headers.Add("Authorization", "Bearer " + AccountConfig.AnonKey);
-        return r;
-    }
+        Text = "Syntra — Terms";
+        ClientSize = new Size(320, 186);
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false; MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterScreen;
+        BackColor = Theme.Bg; ForeColor = Theme.Text; Font = Theme.Body;
+        Ui.DarkTitle(this);
 
-    static async Task<string> Error(HttpResponseMessage resp)
-    {
-        try
+        var box = new TextBox
         {
-            var j = JsonNode.Parse(await resp.Content.ReadAsStringAsync());
-            return (string?)j?["msg"] ?? (string?)j?["error_description"] ?? (string?)j?["message"] ?? $"Error {(int)resp.StatusCode}";
-        }
-        catch { return $"Error {(int)resp.StatusCode}"; }
-    }
-
-    // Sends the code. Returns null when sent, otherwise an error message.
-    public static async Task<string?> SendCode(string email, string username)
-    {
-        try
-        {
-            using var resp = await http.SendAsync(Req("/auth/v1/otp", new { email, create_user = true, data = new { username } }));
-            return resp.IsSuccessStatusCode ? null : await Error(resp);
-        }
-        catch (Exception ex) { return "Couldn't reach the server: " + ex.Message; }
-    }
-
-    // Checks the code. Returns (refresh token, null) on success or (null, error).
-    public static async Task<(string? token, string? error)> Verify(string email, string code)
-    {
-        try
-        {
-            using var resp = await http.SendAsync(Req("/auth/v1/verify", new { type = "email", email, token = code }));
-            if (!resp.IsSuccessStatusCode) return (null, await Error(resp));
-            var j = JsonNode.Parse(await resp.Content.ReadAsStringAsync());
-            return ((string?)j?["refresh_token"] ?? "ok", null);
-        }
-        catch (Exception ex) { return (null, "Couldn't reach the server: " + ex.Message); }
+            Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Text = Terms,
+            BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Text,
+            Font = new Font("Segoe UI", 8.5f), Location = new Point(12, 10), Size = new Size(296, 108), TabStop = false,
+        };
+        var frame = new Panel { Location = new Point(8, 6), Size = new Size(304, 116), BackColor = Theme.Card };
+        frame.Paint += (_, e) => { using var p = new Pen(Theme.Border); e.Graphics.DrawRectangle(p, 0, 0, frame.Width - 1, frame.Height - 1); };
+        var tick = new ToggleSwitch("I accept the terms", false) { Location = new Point(6, 130), BackColor = Theme.Bg };
+        var accept = new RoundButton { Text = "Accept", Primary = true, Location = new Point(176, 130), Size = new Size(70, 34), Enabled = false };
+        var decline = new RoundButton { Text = "Decline", Location = new Point(250, 130), Size = new Size(64, 34) };
+        tick.Toggled += on => { accept.Enabled = on; accept.Invalidate(); };
+        accept.Click += (_, _) => { if (tick.Checked) { DialogResult = DialogResult.OK; Close(); } };
+        decline.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+        Controls.Add(box);
+        Controls.Add(frame);
+        Controls.AddRange(new Control[] { tick, accept, decline });
+        box.BringToFront();
     }
 }
 
+// Sign up (name, username, password) or log in.
 sealed class AccountForm : Form
 {
     readonly FlowLayoutPanel body = new()
     {
         Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-        Padding = new Padding(36, 30, 36, 20),
+        Padding = new Padding(36, 26, 36, 20),
     };
     readonly Label error = Ui.Lbl("", Theme.Body, Theme.Warn, 340);
-    string email = "", username = "";
 
     public AccountForm()
     {
         Text = "Syntra";
-        Size = new Size(440, 560);
+        ClientSize = new Size(424, 520);
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Theme.Bg;
-        body.BackColor = Theme.Bg;
+        BackColor = Theme.Bg; body.BackColor = Theme.Bg;
         Font = Theme.Body;
         Ui.DarkTitle(this);
         Controls.Add(body);
-        StepEmail();
+        if (Account.Load().Exists) LogIn(); else SignUp();
     }
 
-    void Reset(string title, string sub)
+    void Top(string title, string sub, bool signUp)
     {
         body.Controls.Clear();
-        var logo = new LogoTile { Margin = new Padding(2, 0, 0, 18) };
-        body.Controls.Add(logo);
+        error.Text = "";
+        body.Controls.Add(new LogoTile { Margin = new Padding(2, 0, 0, 16) });
+        // Sign up | Log in switch
+        var tabs = new FlowLayoutPanel { AutoSize = true, BackColor = Theme.Bg, Margin = new Padding(0, 0, 0, 12), WrapContents = false };
+        var a = new RoundButton { Text = "Sign up", Primary = signUp, Size = new Size(170, 36), Margin = new Padding(0, 0, 8, 0) };
+        var b = new RoundButton { Text = "Log in", Primary = !signUp, Size = new Size(170, 36), Margin = new Padding(0) };
+        a.Click += (_, _) => SignUp();
+        b.Click += (_, _) => LogIn();
+        tabs.Controls.Add(a); tabs.Controls.Add(b);
+        body.Controls.Add(tabs);
         body.Controls.Add(Ui.Lbl(title, Theme.H1, width: 350));
         body.Controls.Add(Ui.Lbl(sub, Theme.Body, Theme.Muted, 350));
-        body.Controls.Add(new Label { Height = 10, Width = 10 });
-        error.Text = "";
-        error.ForeColor = Theme.Warn;
+        body.Controls.Add(new Label { Height = 6, Width = 10 });
     }
 
-    void StepEmail()
+    static RoundButton Wide(string text)
     {
-        Reset("Create your account", "Pick a username and enter your email. We'll send you a 6-digit code.");
+        return new RoundButton { Text = text, Primary = true, Size = new Size(350, 42), Margin = new Padding(4, 8, 4, 4) };
+    }
+
+    void SignUp()
+    {
+        Top("Create your account", "Just a name, a username and a password.", true);
+        var name = new DarkInput("Name", 350);
         var user = new DarkInput("Username", 350);
-        var mail = new DarkInput("Email", 350);
-        user.Box.Text = username; mail.Box.Text = email;
-        body.Controls.Add(user);
-        body.Controls.Add(mail);
-        var send = Ui.Btn("Send code", () => { }, true);
-        send.AutoSize = false; send.Size = new Size(350, 42);
-        send.Click += async (_, _) =>
+        var pass = new DarkInput("Password", 350);
+        pass.Box.UseSystemPasswordChar = true;
+        body.Controls.AddRange(new Control[] { name, user, pass });
+        var go = Wide("Create account");
+        go.Click += (_, _) =>
         {
-            username = user.Box.Text.Trim(); email = mail.Box.Text.Trim();
-            if (username.Length < 2) { error.Text = "Pick a username (2+ characters)."; return; }
-            if (!email.Contains('@') || !email.Contains('.')) { error.Text = "That email doesn't look right."; return; }
-            send.Enabled = false; send.Text = "Sending…"; error.Text = "";
-            var err = await Auth.SendCode(email, username);
-            send.Enabled = true; send.Text = "Send code";
-            if (err != null) { error.Text = err; return; }
-            StepCode();
+            var n = name.Box.Text.Trim(); var u = user.Box.Text.Trim(); var p = pass.Box.Text;
+            if (n.Length < 1) { error.Text = "Enter your name."; return; }
+            if (u.Length < 3 || u.Any(char.IsWhiteSpace)) { error.Text = "Username needs 3+ characters and no spaces."; return; }
+            if (p.Length < 6) { error.Text = "Password needs at least 6 characters."; return; }
+            var acc = new Account { Name = n, Username = u, LoggedIn = true, Since = DateTime.UtcNow };
+            acc.SetPassword(p);
+            acc.Save();
+            DialogResult = DialogResult.OK; Close();
         };
-        body.Controls.Add(send);
+        body.Controls.Add(go);
         body.Controls.Add(error);
-        body.Controls.Add(Ui.Lbl("Already have an account? Enter the same email — the code signs you in.", Theme.Body, Theme.Muted, 350));
-        AcceptButton = send;
+        AcceptButton = go;
+        ActiveControl = name.Box;
     }
 
-    void StepCode()
+    void LogIn()
     {
-        Reset("Check your email", $"We sent a code to {email}. It can take a minute — check spam too.");
-        var code = new DarkInput("6-digit code", 350);
-        code.Box.MaxLength = 10;
-        code.Box.Font = new Font("Segoe UI Semibold", 16f);
-        code.Size = new Size(350, 52);
-        body.Controls.Add(code);
-        var verify = Ui.Btn("Verify", () => { }, true);
-        verify.AutoSize = false; verify.Size = new Size(350, 42);
-        verify.Click += async (_, _) =>
+        var existing = Account.Load();
+        Top("Welcome back", existing.Exists ? $"Log in as {existing.Name}." : "No account on this PC yet — sign up first.", false);
+        var user = new DarkInput("Username", 350);
+        var pass = new DarkInput("Password", 350);
+        pass.Box.UseSystemPasswordChar = true;
+        if (existing.Exists) user.Box.Text = existing.Username;
+        body.Controls.AddRange(new Control[] { user, pass });
+        var go = Wide("Log in");
+        go.Click += (_, _) =>
         {
-            var c = new string(code.Box.Text.Where(char.IsDigit).ToArray());
-            if (c.Length < 6) { error.Text = "Enter the code from the email."; return; }
-            verify.Enabled = false; verify.Text = "Checking…"; error.Text = "";
-            var (token, err) = await Auth.Verify(email, c);
-            verify.Enabled = true; verify.Text = "Verify";
-            if (token == null) { error.Text = err ?? "That code didn't work."; return; }
-            new Account { Email = email, Username = username, RefreshToken = token, Since = DateTime.UtcNow }.Save();
-            DialogResult = DialogResult.OK;
-            Close();
+            var acc = Account.Load();
+            if (!acc.Exists) { error.Text = "No account on this PC yet. Sign up first."; return; }
+            if (!string.Equals(acc.Username, user.Box.Text.Trim(), StringComparison.OrdinalIgnoreCase) || !acc.Check(pass.Box.Text))
+            { error.Text = "Wrong username or password."; pass.Box.Clear(); return; }
+            acc.LoggedIn = true; acc.Save();
+            DialogResult = DialogResult.OK; Close();
         };
-        body.Controls.Add(verify);
+        body.Controls.Add(go);
         body.Controls.Add(error);
-        var row = new FlowLayoutPanel { AutoSize = true, BackColor = Theme.Bg, Margin = new Padding(0, 6, 0, 0) };
-        var resend = Ui.Btn("Resend code", async () =>
-        {
-            var err = await Auth.SendCode(email, username);
-            error.ForeColor = err == null ? Theme.Good : Theme.Warn;
-            error.Text = err ?? "Sent again.";
-        });
-        row.Controls.Add(resend);
-        row.Controls.Add(Ui.Btn("Change email", StepEmail));
-        body.Controls.Add(row);
-        AcceptButton = verify;
-        code.Box.Focus();
+        AcceptButton = go;
+        ActiveControl = existing.Exists ? pass.Box : user.Box;
     }
 }

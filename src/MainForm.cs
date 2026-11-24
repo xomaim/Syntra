@@ -839,18 +839,16 @@ class MainForm : Form
         page.Controls.Add(gen);
 
         var acc = Account.Load();
-        if (AccountConfig.Enabled)
+        var a = Ui.Card("Account", acc.Exists ? $"{acc.Name} · @{acc.Username}" : "No account.");
+        a.Controls.Add(Ui.Btn("Log out", () =>
         {
-            var a = Ui.Card("Account", acc.SignedIn ? $"{acc.Username} · {acc.Email}" : "Not signed in.");
-            a.Controls.Add(Ui.Btn(acc.SignedIn ? "Sign out" : "Sign in", () =>
-            {
-                Account.SignOut();
-                using var f = new AccountForm();
-                f.ShowDialog(this);
-                Show("Settings");
-            }));
-            page.Controls.Add(a);
-        }
+            acc.LoggedIn = false; acc.Save();
+            Hide();
+            using var f = new AccountForm();
+            if (f.ShowDialog() != DialogResult.OK) { Program.ExitApp(); return; }
+            Show(); Show("Settings");
+        }));
+        page.Controls.Add(a);
 
         var promise = Ui.Card("What Syntra never does", null);
         foreach (var line in new[]
