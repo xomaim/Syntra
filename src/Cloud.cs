@@ -8,8 +8,8 @@ namespace Syntra;
 // from anywhere, and lets admins see who uses Syntra. Off until the two values below are filled in.
 static class CloudConfig
 {
-    public const string Url = "";
-    public const string AnonKey = "";
+    public const string Url = "https://bdjzdrfgwrsrtwkukhco.supabase.co";
+    public const string AnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJkanpkcmZnd3JzcnR3a3VraGNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1NTczMDcsImV4cCI6MjExMTEzMzMwN30.AvVCOc5GMRW2NNvCzLZOehZ5TFWfeFupsNOFlnhGb_c";
     public static bool On => Url.Length > 0 && AnonKey.Length > 0;
 }
 

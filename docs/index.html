@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Syntra · Pixy Studios</title>
+<link rel="icon" href="logo.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- 1. Sign in (white) -->
+<section id="login" class="screen">
+  <div class="box">
+    <div class="logo">S</div>
+    <h1 id="ltitle">Sign in to Syntra</h1>
+    <p id="lsub">Use the same username and password as the Syntra app.</p>
+    <form id="lf" autocomplete="on">
+      <input id="name" placeholder="Name" autocomplete="name" class="hide">
+      <input id="u" placeholder="Username" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <input id="p" placeholder="Password" type="password" autocomplete="current-password" required>
+      <button type="submit" id="lb">Sign in</button>
+    </form>
+    <div class="err" id="le"></div>
+    <button class="link" id="swap">New here? Create an account</button>
+    <div class="foot">Pixy Studios</div>
+  </div>
+</section>
+
+<!-- 2. Logo zoom -->
+<div id="intro"><div class="logo">S</div></div>
+
+<!-- 3. Home -->
+<main id="home">
+  <header class="top">
+    <div class="logo sm">S</div>
+    <div class="who"><h2 id="hi">Syntra</h2><small id="sub">…</small></div>
+    <div class="sp"></div>
+    <div class="live" id="live">● Offline</div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab on" data-tab="control">Control</button>
+    <button class="tab" data-tab="pcs">My PCs</button>
+    <button class="tab hide" data-tab="admin" id="admintab">Admin</button>
+  </nav>
+
+  <section id="t_control">
+    <div class="empty hide" id="nopc">
+      <h3>No PC linked yet</h3>
+      <p>Open Syntra on your PC and sign in with this account. It will appear here.</p>
+    </div>
+    <div id="controls">
+      <div class="card hero">
+        <div class="row"><span class="name">Saturation</span><span class="val" id="v_saturation">100%</span></div>
+        <input type="range" id="saturation" min="0" max="300" step="1">
+        <div class="chips">
+          <button class="chip" data-sat="100">100%</button><button class="chip" data-sat="150">150%</button>
+          <button class="chip" data-sat="200">200%</button><button class="chip" data-sat="250">250%</button>
+          <button class="chip" data-sat="300">300%</button>
+        </div>
+      </div>
+      <div class="card"><div class="switch"><h3>Colours on</h3><div class="tg" id="enabled"></div></div></div>
+      <div class="card" id="fine"><h3>Fine tune</h3></div>
+      <div class="card">
+        <div class="switch"><h3>Hue changer</h3><div class="tg" id="hueOn"></div></div>
+        <div class="slider"><div class="row"><span class="name">Hue shift</span><span class="val" id="v_hueDegrees">0°</span></div>
+        <input type="range" id="hueDegrees" min="-180" max="180" step="1"></div>
+      </div>
+      <div class="card"><h3>Presets</h3><div class="chips" id="presets"></div></div>
+      <button class="btn" id="reset">Reset to normal</button>
+    </div>
+  </section>
+
+  <section id="t_pcs" class="hide"><div id="pclist"></div></section>
+
+  <section id="t_admin" class="hide">
+    <div class="stats">
+      <div class="stat"><b id="s_users">0</b><span>Users</span></div>
+      <div class="stat"><b id="s_online">0</b><span>Online now</span></div>
+      <div class="stat"><b id="s_pcs">0</b><span>PCs</span></div>
+    </div>
+    <input id="search" class="search" placeholder="Search users…">
+    <div id="userlist"></div>
+  </section>
+
+  <button class="btn ghost" id="out">Sign out</button>
+  <div class="note">Pixy Studios · Syntra</div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
