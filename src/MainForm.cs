@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text.Json.Nodes;
 
 namespace Syntra;
 
@@ -25,7 +26,10 @@ class MainForm : Form
     readonly System.Windows.Forms.Timer applyTimer = new() { Interval = 15 };
     readonly System.Windows.Forms.Timer saveDebounce = new() { Interval = 600 };
     readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 60_000 };
-    bool dirty, remoteDirty;
+    bool dirty, remoteDirty, cloudChanged = true, cloudBusy, cloudApplying;
+    long cloudRev;
+    DateTime cloudBeat;
+    readonly System.Windows.Forms.Timer cloudTimer = new() { Interval = 1500 };
     DateTime lastRemoteRefresh;
     RemoteServer? remote;
     string remoteError = "";
@@ -129,6 +133,8 @@ class MainForm : Form
         UpdateHueOverlay();
         if (S.Crosshair.On) ShowCrosshair(true);
         UpdateRemote();
+        cloudTimer.Tick += async (_, _) => await CloudTick();
+        cloudTimer.Start();
     }
 
     // ---------- Phone control ----------
@@ -265,7 +271,48 @@ class MainForm : Form
     }
 
     // Slider moves only mark "dirty"; a 15 ms timer applies the newest value. Fast, never queues up.
-    void Changed() { dirty = true; saveDebounce.Stop(); saveDebounce.Start(); }
+    void Changed() { dirty = true; if (!cloudApplying) cloudChanged = true; saveDebounce.Stop(); saveDebounce.Start(); }
+
+    // Syntra Cloud: the website writes settings with by="web"; this PC applies them and reports its own changes back.
+    async Task CloudTick()
+    {
+        if (!CloudConfig.On || cloudBusy) return;
+        cloudBusy = true;
+        try
+        {
+            var acc = Account.Load();
+            var dev = await Cloud.GetDevice(acc);
+            if (dev == null) return;
+            var st = dev["settings"] as JsonObject;
+            long rev = 0;
+            try { rev = st?["rev"]?.GetValue<long>() ?? 0; } catch { }
+            string by = (string?)st?["by"] ?? "";
+            if (by == "web" && rev > cloudRev && st != null)
+            {
+                cloudRev = rev;
+                var changes = st["changes"] as JsonObject ?? st;
+                cloudApplying = true;
+                try { RemoteSet(changes.ToJsonString()); } finally { cloudApplying = false; }
+                cloudChanged = true; // send back the full, applied state
+            }
+            if (cloudChanged)
+            {
+                cloudChanged = false;
+                cloudRev = Math.Max(cloudRev, rev) + 1;
+                var mine = JsonNode.Parse(RemoteState()) as JsonObject ?? new JsonObject();
+                mine["rev"] = cloudRev; mine["by"] = "pc";
+                await Cloud.Push(acc, mine);
+                cloudBeat = DateTime.UtcNow;
+            }
+            else if ((DateTime.UtcNow - cloudBeat).TotalSeconds > 25)
+            {
+                await Cloud.Push(acc, null); // "online" heartbeat
+                cloudBeat = DateTime.UtcNow;
+            }
+        }
+        catch { }
+        finally { cloudBusy = false; }
+    }
 
     void ToggleEnabled() { S.Enabled = !S.Enabled; ApplyNow(); UpdateHueOverlay(); S.Save(); Refresh("Display"); }
 
@@ -336,6 +383,7 @@ class MainForm : Form
     {
         watch.Stop(); updateTimer.Stop(); applyTimer.Stop();
         remote?.Stop();
+        cloudTimer.Stop();
         try { Native.UnregisterHotKey(Handle, HotkeyId); } catch { }
         overlay?.Close();
         hueOverlay?.Close();

@@ -12,6 +12,9 @@ public class Account
     public string Salt { get; set; } = "";
     public string Hash { get; set; } = "";
     public bool LoggedIn { get; set; }
+    public string CloudUserId { get; set; } = "";
+    public string CloudRefresh { get; set; } = "";
+    public string DeviceId { get; set; } = "";
     public DateTime Since { get; set; }
 
     public bool Exists => Username.Length > 0 && Hash.Length > 0;
@@ -229,13 +232,21 @@ sealed class AccountForm : Form
         pass.Box.UseSystemPasswordChar = true;
         body.Controls.AddRange(new Control[] { name, user, pass });
         var go = Wide("Create account");
-        go.Click += (_, _) =>
+        go.Click += async (_, _) =>
         {
             var n = name.Box.Text.Trim(); var u = user.Box.Text.Trim(); var p = pass.Box.Text;
             if (n.Length < 1) { error.Text = "Enter your name."; return; }
             if (u.Length < 3 || u.Any(char.IsWhiteSpace)) { error.Text = "Username needs 3+ characters and no spaces."; return; }
             if (p.Length < 6) { error.Text = "Password needs at least 6 characters."; return; }
             var acc = new Account { Name = n, Username = u, LoggedIn = true, Since = DateTime.UtcNow };
+            if (CloudConfig.On)
+            {
+                go.Enabled = false; go.Text = "Creating…";
+                var (id, rt, err) = await Cloud.SignUp(u, n, p);
+                go.Enabled = true; go.Text = "Create account";
+                if (err != null) { error.Text = err; return; }
+                acc.CloudUserId = id!; acc.CloudRefresh = rt!;
+            }
             acc.SetPassword(p);
             acc.Save();
             DialogResult = DialogResult.OK; Close();
@@ -256,9 +267,26 @@ sealed class AccountForm : Form
         if (existing.Exists) user.Box.Text = existing.Username;
         body.Controls.AddRange(new Control[] { user, pass });
         var go = Wide("Log in");
-        go.Click += (_, _) =>
+        go.Click += async (_, _) =>
         {
             var acc = Account.Load();
+            if (CloudConfig.On)
+            {
+                // Signing in on a new PC works with a cloud account too.
+                go.Enabled = false; go.Text = "Signing in…";
+                var u = user.Box.Text.Trim(); var pw = pass.Box.Text;
+                var (id, rt, err) = await Cloud.SignIn(u, pw);
+                if (err != null && acc.Exists && string.Equals(acc.Username, u, StringComparison.OrdinalIgnoreCase) && acc.Check(pw))
+                    (id, rt, err) = await Cloud.SignUp(acc.Username, acc.Name, pw); // older PC-only account: put it online
+                go.Enabled = true; go.Text = "Log in";
+                if (err != null) { error.Text = err; pass.Box.Clear(); return; }
+                if (!acc.Exists || !string.Equals(acc.Username, u, StringComparison.OrdinalIgnoreCase))
+                    acc = new Account { Name = u, Username = u, Since = DateTime.UtcNow };
+                acc.SetPassword(pw);
+                acc.CloudUserId = id!; acc.CloudRefresh = rt!; acc.LoggedIn = true; acc.Save();
+                DialogResult = DialogResult.OK; Close();
+                return;
+            }
             if (!acc.Exists) { error.Text = "No account on this PC yet. Sign up first."; return; }
             if (!string.Equals(acc.Username, user.Box.Text.Trim(), StringComparison.OrdinalIgnoreCase) || !acc.Check(pass.Box.Text))
             { error.Text = "Wrong username or password."; pass.Box.Clear(); return; }
