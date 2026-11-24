@@ -3,8 +3,8 @@ using System.Runtime.InteropServices;
 
 namespace Syntra;
 
-// Per-app hue: a see-through, click-through layer that sits exactly over ONE app's window
-// (only while that app is in front) and shows what's underneath with the hue shifted.
+// Per-app hue: a see-through, click-through layer that sits directly above ONE app's window
+// (wherever it is — any monitor, focused or not) and shows what's underneath with the hue shifted.
 // It uses Windows' Magnifier control to copy the screen. It never opens, reads or injects into the app.
 sealed class HueOverlay : Form
 {
@@ -24,35 +24,43 @@ sealed class HueOverlay : Form
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int size);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] static extern int DwmGetInt(IntPtr h, int a, out int v, int size);
     [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
     [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
     [DllImport("user32.dll")] static extern bool DestroyWindow(IntPtr h);
-    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] static extern int DwmGetInt(IntPtr h, int a, out int v, int size);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] static extern int GetWindowTextLength(IntPtr h);
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int idx);
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
 
-    // Out-of-context window events: Windows tells us when windows move or change focus. No injection.
     delegate void WinEventProc(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
     [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc cb, uint pid, uint tid, uint flags);
     [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr h);
     const uint EVENT_SYSTEM_FOREGROUND = 0x3, EVENT_SYSTEM_MOVESIZESTART = 0xA, EVENT_SYSTEM_MOVESIZEEND = 0xB,
                EVENT_SYSTEM_MINIMIZESTART = 0x16, EVENT_SYSTEM_MINIMIZEEND = 0x17,
-               EVENT_OBJECT_DESTROY = 0x8001, EVENT_OBJECT_SHOW = 0x8002, EVENT_OBJECT_HIDE = 0x8003, EVENT_OBJECT_LOCATIONCHANGE = 0x800B,
-               EVENT_OBJECT_CLOAKED = 0x8017, EVENT_OBJECT_UNCLOAKED = 0x8018;
-    readonly WinEventProc proc;
-    readonly List<IntPtr> hooks = new();
-    bool moving;
-    RECT lastRect;
-
+               EVENT_OBJECT_DESTROY = 0x8001, EVENT_OBJECT_HIDE = 0x8003, EVENT_OBJECT_REORDER = 0x8004,
+               EVENT_OBJECT_LOCATIONCHANGE = 0x800B, EVENT_OBJECT_CLOAKED = 0x8017, EVENT_OBJECT_UNCLOAKED = 0x8018;
+    const uint GW_HWNDPREV = 3, GW_OWNER = 4;
 
     static readonly IntPtr PerMonitorV2 = new(-4);
     readonly System.Windows.Forms.Timer tick = new() { Interval = 16 };
-    IntPtr mag;
-    IntPtr lastFg;
-    string lastName = "";
-    bool shown;
-    public string Target = "";
+    readonly WinEventProc proc;
+    readonly List<IntPtr> hooks = new();
+    readonly Dictionary<uint, string> names = new();
+    IntPtr mag, target;
+    DateTime lastScan;
+    bool shown, moving;
+    RECT lastRect;
+    string targetName = "";
     float[] effect = ColorEngine.Effect(ColorEngine.HueMatrix(0));
-    public bool Working => mag != IntPtr.Zero;
+
+    public string Target
+    {
+        get => targetName;
+        set { if (!string.Equals(value, targetName, StringComparison.OrdinalIgnoreCase)) { targetName = value; target = IntPtr.Zero; lastScan = default; } }
+    }
 
     public HueOverlay()
     {
@@ -62,27 +70,17 @@ sealed class HueOverlay : Form
         Size = new Size(1, 1);
         var old = SetThreadDpiAwarenessContext(PerMonitorV2);
         try { CreateHandle(); } finally { SetThreadDpiAwarenessContext(old); }
+
         proc = OnWinEvent;
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, proc, 0, 0, 2));
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND, IntPtr.Zero, proc, 0, 0, 2));
-        hooks.Add(SetWinEventHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, proc, 0, 0, 2));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, IntPtr.Zero, proc, 0, 0, 2));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, proc, 0, 0, 2));
-        hooks.Add(SetWinEventHook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED, IntPtr.Zero, proc, 0, 0, 2));
+        void Hook(uint a, uint b) => hooks.Add(SetWinEventHook(a, b, IntPtr.Zero, proc, 0, 0, 2)); // out-of-context, skip own process
+        Hook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND);
+        Hook(EVENT_SYSTEM_MOVESIZESTART, EVENT_SYSTEM_MOVESIZEEND);
+        Hook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND);
+        Hook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_REORDER);
+        Hook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE);
+        Hook(EVENT_OBJECT_CLOAKED, EVENT_OBJECT_UNCLOAKED);
         tick.Tick += (_, _) => Follow();
         tick.Start();
-    }
-
-    void OnWinEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
-    {
-        if (ev == EVENT_SYSTEM_FOREGROUND) { moving = false; Follow(); return; }
-        if (hwnd != lastFg || idObject != 0) return; // only the window we're covering
-        switch (ev)
-        {
-            case EVENT_SYSTEM_MOVESIZESTART: moving = true; Hide2(); break;   // hide while dragging: no trailing/lag
-            case EVENT_SYSTEM_MOVESIZEEND: moving = false; Follow(); break;
-            default: Follow(); break;                                         // snapped, maximised, minimised, closed, hidden
-        }
     }
 
     protected override bool ShowWithoutActivation => true;
@@ -92,7 +90,7 @@ sealed class HueOverlay : Form
         get
         {
             var cp = base.CreateParams;
-            cp.ExStyle |= 0x80000 | 0x20 | 0x80 | 0x08000000 | 0x8; // layered, click-through, tool, no-activate, topmost
+            cp.ExStyle |= 0x80000 | 0x20 | 0x80 | 0x08000000; // layered, click-through, tool window, never takes focus
             return cp;
         }
     }
@@ -120,38 +118,82 @@ sealed class HueOverlay : Form
         if (mag != IntPtr.Zero) MagSetColorEffect(mag, effect);
     }
 
+    void OnWinEvent(IntPtr hook, uint ev, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        if (ev == EVENT_SYSTEM_FOREGROUND) { Follow(); return; }   // something came to the front: restack above the app
+        if (hwnd != target || target == IntPtr.Zero || idObject != 0) return;
+        switch (ev)
+        {
+            case EVENT_SYSTEM_MOVESIZESTART: moving = true; Hide2(); break;   // hide while dragging: no trailing/lag
+            case EVENT_SYSTEM_MOVESIZEEND: moving = false; Follow(); break;
+            case EVENT_OBJECT_DESTROY: target = IntPtr.Zero; Hide2(); break;
+            default: Follow(); break;
+        }
+    }
+
     void Hide2() { if (shown) { ShowWindow(Handle, 0); shown = false; lastRect = default; } }
+
+    string NameOf(uint pid)
+    {
+        if (names.TryGetValue(pid, out var n)) return n;
+        try { using var p = Process.GetProcessById((int)pid); n = p.ProcessName; } catch { n = ""; }
+        if (names.Count > 500) names.Clear();
+        return names[pid] = n;
+    }
+
+    static bool Cloaked(IntPtr h) => DwmGetInt(h, 14, out var c, 4) == 0 && c != 0;
+
+    bool IsTargetWindow(IntPtr h)
+    {
+        if (!IsWindow(h)) return false;
+        Native.GetWindowThreadProcessId(h, out var pid);
+        return string.Equals(NameOf(pid), targetName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // The app's main window: its biggest visible, titled, top-level window.
+    IntPtr FindTarget()
+    {
+        if (target != IntPtr.Zero && IsTargetWindow(target)) return target;
+        target = IntPtr.Zero;
+        if (DateTime.UtcNow - lastScan < TimeSpan.FromSeconds(1)) return IntPtr.Zero;
+        lastScan = DateTime.UtcNow;
+        IntPtr best = IntPtr.Zero; long bestArea = 0;
+        EnumWindows((h, _) =>
+        {
+            if (!IsWindowVisible(h) || GetWindow(h, GW_OWNER) != IntPtr.Zero || GetWindowTextLength(h) == 0) return true;
+            if ((GetWindowLong(h, -20) & 0x80) != 0 || Cloaked(h)) return true; // tool windows / hidden
+            if (!IsTargetWindow(h)) return true;
+            GetWindowRect(h, out var r);
+            long area = (long)(r.R - r.L) * (r.B - r.T);
+            if (area > bestArea) { bestArea = area; best = h; }
+            return true;
+        }, IntPtr.Zero);
+        return target = best;
+    }
 
     void Follow()
     {
-        if (mag == IntPtr.Zero || Target == "") { Hide2(); return; }
-        var fg = Native.GetForegroundWindow();
-        if (fg != lastFg)
-        {
-            lastFg = fg;
-            lastName = "";
-            try
-            {
-                Native.GetWindowThreadProcessId(fg, out var pid);
-                using var p = Process.GetProcessById((int)pid);
-                lastName = p.ProcessName;
-            }
-            catch { }
-        }
-        if (fg == IntPtr.Zero || moving || !string.Equals(lastName, Target, StringComparison.OrdinalIgnoreCase)
-            || !IsWindow(fg) || !IsWindowVisible(fg) || IsIconic(fg) || Cloaked(fg)) { Hide2(); return; }
+        if (mag == IntPtr.Zero || targetName == "") { Hide2(); return; }
+        var t = FindTarget();
+        if (t == IntPtr.Zero || moving || !IsWindowVisible(t) || IsIconic(t) || Cloaked(t)) { Hide2(); return; }
         if (!IsWindow(mag)) MakeMag();
 
         var old = SetThreadDpiAwarenessContext(PerMonitorV2);
         try
         {
-            if (DwmGetWindowAttribute(fg, 9, out var r, Marshal.SizeOf<RECT>()) != 0) GetWindowRect(fg, out r);
+            if (DwmGetWindowAttribute(t, 9, out var r, Marshal.SizeOf<RECT>()) != 0) GetWindowRect(t, out r);
             int w = r.R - r.L, h = r.B - r.T;
             if (w < 2 || h < 2) { Hide2(); return; }
-            if (!shown || r.L != lastRect.L || r.T != lastRect.T || r.R != lastRect.R || r.B != lastRect.B)
+
+            // Sit directly above the app in the window stack — not on top of everything.
+            // Windows you put over the app still cover it normally.
+            var above = GetWindow(t, GW_HWNDPREV);
+            bool moved = r.L != lastRect.L || r.T != lastRect.T || r.R != lastRect.R || r.B != lastRect.B;
+            if (!shown || moved || above != Handle)
             {
-                Native.SetWindowPos(Handle, Native.HWND_TOPMOST, r.L, r.T, w, h, 0x0010 | 0x0040); // no-activate, show
-                MoveWindow(mag, 0, 0, w, h, false);
+                Native.SetWindowPos(Handle, above == Handle ? Handle : above, r.L, r.T, w, h,
+                    0x0010u | 0x0040u | (above == Handle ? 0x0004u : 0u)); // no-activate, show, (keep z if already right)
+                if (moved || !shown) MoveWindow(mag, 0, 0, w, h, false);
                 lastRect = r;
                 shown = true;
             }
@@ -160,8 +202,6 @@ sealed class HueOverlay : Form
         }
         finally { SetThreadDpiAwarenessContext(old); }
     }
-
-    static bool Cloaked(IntPtr h) => DwmGetInt(h, 14, out var c, 4) == 0 && c != 0;
 
     protected override void Dispose(bool disposing)
     {

@@ -156,7 +156,7 @@ class MainForm : Form
         ForeColor = Theme.Text;
         content.BackColor = Theme.Bg;
         sideHost.BackColor = side.BackColor = sideBottom.BackColor = Theme.Side;
-        foreach (var b in navButtons.Values) { b.BackColor = Theme.Side; b.Invalidate(); }
+        foreach (var b in navButtons.Values) b.Invalidate();
         logo.Invalidate();
         sideHost.Invalidate();
         if (IsHandleCreated) Ui.RetitleColour(this);
@@ -546,7 +546,7 @@ class MainForm : Form
 
         string note = S.HueTarget == ""
             ? "Whole screen: changes everything you see, games included."
-            : $"Only {S.HueTarget}: a see-through layer follows that window while it's in front. It never touches the app itself. Works best with the app in a normal (not exclusive full-screen) window.";
+            : $"Only {S.HueTarget}: a see-through layer follows that window on any monitor, even when you are clicked into something else. It never touches the app itself. Works best with the app in a normal (not exclusive full-screen) window.";
         page.Controls.Add(Ui.Lbl(note, Theme.Body, Theme.Muted, Ui.PageW));
         return page;
     }

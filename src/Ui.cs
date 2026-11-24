@@ -664,8 +664,8 @@ class NavIcon : Control
         Kind = kind;
         Size = new Size(48, 48);
         Margin = new Padding(8, 4, 8, 4);
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        BackColor = Theme.Side;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+        BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
     }
 
@@ -676,21 +676,19 @@ class NavIcon : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        if (!Bg.Paint(g, this, Bg.SideTint)) g.Clear(Theme.Side);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        var tile = new RectangleF(2, 2, Width - 4, Height - 4);
+        var tile = new RectangleF(4, 4, Width - 8, Height - 8);
         if (selected)
         {
             using var b = new SolidBrush(Theme.Accent);
-            using var path = Gfx.Round(tile, 12);
+            using var path = Gfx.Round(tile, 11);
             g.FillPath(b, path);
         }
         else if (hover)
         {
             using var b = new SolidBrush(Color.FromArgb(150, Theme.Hover));
             using var p = new Pen(Color.FromArgb(120, Theme.Mix(Theme.Border, Color.White, 0.2)));
-            using var path = Gfx.Round(tile, 12);
+            using var path = Gfx.Round(tile, 11);
             g.FillPath(b, path);
             g.DrawPath(p, path);
         }
@@ -782,7 +780,8 @@ class LogoTile : Control
     {
         Size = new Size(40, 40);
         Margin = new Padding(12, 14, 12, 18);
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+        BackColor = Color.Transparent;
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -790,7 +789,6 @@ class LogoTile : Control
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        if (!Bg.Paint(g, this, Parent is BgFlow { Tint: > 0 } ? Bg.SideTint : 0)) g.Clear(Parent?.BackColor ?? Theme.Side);
         using var b = new SolidBrush(Theme.Accent);
         using var path = Gfx.Round(new RectangleF(0, 0, Width - 1, Height - 1), 11);
         g.FillPath(b, path);
