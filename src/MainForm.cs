@@ -98,7 +98,7 @@ class MainForm : Form
 
         updateTimer.Tick += async (_, _) => await CheckUpdate();
         updateTimer.Start();
-        BeginInvoke(new Action(async () => await CheckUpdate()));
+        Load += async (_, _) => { await Task.Delay(3000); await CheckUpdate(); };
 
         Show("Display");
         ApplyNow();
@@ -219,6 +219,7 @@ class MainForm : Form
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == Native.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId) ToggleEnabled();
+        if (m.Msg == Program.ShowMsg && Program.ShowMsg != 0) ShowFromTray();
         base.WndProc(ref m);
     }
 
