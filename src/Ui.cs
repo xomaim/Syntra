@@ -224,7 +224,7 @@ class ToggleSwitch : Control
         BackColor = Theme.Card;
     }
 
-    protected override void OnClick(EventArgs e) { on = !on; Invalidate(); Toggled?.Invoke(on); base.OnClick(e); }
+    protected override void OnClick(EventArgs e) { if (!Enabled) return; on = !on; Invalidate(); Toggled?.Invoke(on); base.OnClick(e); }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -238,7 +238,7 @@ class ToggleSwitch : Control
         float kx = on ? track.Right - 19 : track.Left + 3;
         using (var kb = new SolidBrush(on ? Theme.AccentText : Color.FromArgb(200, 200, 205)))
             g.FillEllipse(kb, kx, track.Top + 3, 16, 16);
-        TextRenderer.DrawText(g, Text, Font, new Point(52, 9), Theme.Text);
+        TextRenderer.DrawText(g, Text, Font, new Point(52, 9), Enabled ? Theme.Text : Theme.Muted);
     }
 }
 
@@ -484,10 +484,15 @@ class DarkMenuRenderer : ToolStripProfessionalRenderer
         g.FillPath(b, path);
     }
 
+    // Every item's text starts at the same left edge; shortcuts line up on the right.
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = e.Item.Enabled ? Theme.Text : Theme.Muted;
-        base.OnRenderItemText(e);
+        var item = e.Item;
+        bool shortcut = item is ToolStripMenuItem mi && mi.ShortcutKeyDisplayString == e.Text && e.Text != item.Text;
+        var box = new Rectangle(16, 0, item.Width - 32, item.Height);
+        TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont ?? item.Font, box,
+            shortcut ? Theme.Muted : item.Enabled ? Theme.Text : Theme.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | (shortcut ? TextFormatFlags.Right : TextFormatFlags.Left));
     }
 
     protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)

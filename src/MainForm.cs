@@ -83,16 +83,20 @@ class MainForm : Form
         menu.Font = new Font("Segoe UI", 10f);
         menu.Padding = new Padding(4, 6, 4, 6);
         menu.HandleCreated += (_, _) => Gfx.RoundCorners(menu.Handle);
-        void Item(string text, Action a)
+        void Item(string text, Action a, string keys = "")
         {
-            var it = new ToolStripMenuItem(text) { Padding = new Padding(8, 6, 8, 6) };
+            var it = new ToolStripMenuItem(text)
+            {
+                AutoSize = false, Size = new Size(280, 36), TextAlign = ContentAlignment.MiddleLeft,
+                ShortcutKeyDisplayString = keys, ShowShortcutKeys = keys != "",
+            };
             it.Click += (_, _) => a();
             menu.Items.Add(it);
         }
         Item("Open Syntra", ShowFromTray);
-        Item("Colours on / off      Ctrl+Alt+V", ToggleEnabled);
+        Item("Colours on / off", ToggleEnabled, "Ctrl+Alt+V");
         Item("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); S.Save(); });
-        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripSeparator { AutoSize = false, Size = new Size(280, 9) });
         Item("Exit", Program.ExitApp);
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => ShowFromTray();
