@@ -69,6 +69,7 @@ public class AppSettings
     public int WindowOpacity { get; set; } = 100;
     public bool AutoUpdate { get; set; } = true;
     public bool TermsAccepted { get; set; }
+    public bool RemoteOn { get; set; }
 
     public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Syntra");
     static string FilePath => Path.Combine(Dir, "settings.json");

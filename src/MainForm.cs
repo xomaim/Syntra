@@ -25,7 +25,10 @@ class MainForm : Form
     readonly System.Windows.Forms.Timer applyTimer = new() { Interval = 15 };
     readonly System.Windows.Forms.Timer saveDebounce = new() { Interval = 600 };
     readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 60_000 };
-    bool dirty;
+    bool dirty, remoteDirty;
+    DateTime lastRemoteRefresh;
+    RemoteServer? remote;
+    string remoteError = "";
     MonitorDdc? ddc;
     CrosshairOverlay? overlay;
     HueOverlay? hueOverlay;
@@ -75,7 +78,15 @@ class MainForm : Form
         ApplyThemeColours();
 
         saveDebounce.Tick += (_, _) => { saveDebounce.Stop(); S.Save(); };
-        applyTimer.Tick += (_, _) => { if (dirty) { dirty = false; ApplyNow(); } };
+        applyTimer.Tick += (_, _) =>
+        {
+            if (dirty) { dirty = false; ApplyNow(); }
+            if (remoteDirty && (DateTime.UtcNow - lastRemoteRefresh).TotalMilliseconds > 400)
+            {
+                remoteDirty = false; lastRemoteRefresh = DateTime.UtcNow;
+                if (currentPage is "Display" or "Hue changer" && Visible && Control.MouseButtons == MouseButtons.None) Show(currentPage);
+            }
+        };
         applyTimer.Start();
 
         tray.Icon = Icon;
@@ -117,6 +128,74 @@ class MainForm : Form
         ApplyNow();
         UpdateHueOverlay();
         if (S.Crosshair.On) ShowCrosshair(true);
+        UpdateRemote();
+    }
+
+    // ---------- Phone control ----------
+    void UpdateRemote()
+    {
+        if (S.RemoteOn && remote == null)
+        {
+            remote = new RemoteServer(
+                () => (string)Invoke(new Func<string>(RemoteState)),
+                body => (string)Invoke(new Func<string>(() => RemoteSet(body))));
+            try { remote.Start(); remoteError = ""; }
+            catch (Exception ex) { remote = null; remoteError = ex.Message; }
+        }
+        else if (!S.RemoteOn && remote != null) { remote.Stop(); remote = null; }
+    }
+
+    string RemoteState()
+    {
+        var L = ActiveLook;
+        var o = new System.Text.Json.Nodes.JsonObject
+        {
+            ["enabled"] = S.Enabled, ["saturation"] = L.Saturation, ["vibrance"] = L.Vibrance, ["brightness"] = L.Brightness,
+            ["contrast"] = L.Contrast, ["gamma"] = L.Gamma, ["temperature"] = L.Temperature,
+            ["hueOn"] = S.HueOn, ["hueDegrees"] = S.HueDegrees, ["game"] = activeGame,
+            ["user"] = Account.Load().Name, ["version"] = Updater.Current.ToString(),
+            ["presets"] = new System.Text.Json.Nodes.JsonArray(Look.BuiltIn().Concat(S.Saved).Select(l => (System.Text.Json.Nodes.JsonNode?)l.Name).ToArray()),
+        };
+        return o.ToJsonString();
+    }
+
+    string RemoteSet(string body)
+    {
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(body) is System.Text.Json.Nodes.JsonObject j)
+            {
+                var L = ActiveLook;
+                foreach (var (k, v) in j)
+                {
+                    if (v == null) continue;
+                    double D(double min, double max) => Math.Clamp(v.GetValue<double>(), min, max);
+                    switch (k)
+                    {
+                        case "saturation": L.Saturation = D(0, 300); break;
+                        case "vibrance": L.Vibrance = D(0, 100); break;
+                        case "brightness": L.Brightness = D(50, 150); break;
+                        case "contrast": L.Contrast = D(50, 150); break;
+                        case "gamma": L.Gamma = D(0.5, 2); break;
+                        case "temperature": L.Temperature = D(-100, 100); break;
+                        case "hueDegrees": S.HueDegrees = D(-180, 180); break;
+                        case "enabled": S.Enabled = v.GetValue<bool>(); break;
+                        case "hueOn": S.HueOn = v.GetValue<bool>(); break;
+                        case "preset":
+                            var name = v.GetValue<string>();
+                            var p = Look.BuiltIn().Concat(S.Saved).FirstOrDefault(x => x.Name == name);
+                            if (p != null) CopyInto(p, L);
+                            break;
+                    }
+                }
+                Changed();
+                UpdateHueOverlay();
+                hueOverlay?.SetEffect(S.HueDegrees, S.HueSat / 100.0);
+                remoteDirty = true;
+            }
+        }
+        catch { }
+        return RemoteState();
     }
 
     // ---------- plumbing ----------
@@ -256,6 +335,7 @@ class MainForm : Form
     public void Cleanup()
     {
         watch.Stop(); updateTimer.Stop(); applyTimer.Stop();
+        remote?.Stop();
         try { Native.UnregisterHotKey(Handle, HotkeyId); } catch { }
         overlay?.Close();
         hueOverlay?.Close();
@@ -881,6 +961,26 @@ class MainForm : Form
         }));
         gen.Controls.Add(Ui.Lbl($"Installed at {Installer.Dir}", Theme.Body, Theme.Muted, Ui.PageW - 40));
         page.Controls.Add(gen);
+
+        var phone = Ui.Card("Phone control", "Change your colours from your phone. Your phone must be on the same Wi-Fi as this PC.");
+        phone.Controls.Add(Ui.Toggle("Phone control on", S.RemoteOn, v => { S.RemoteOn = v; S.Save(); UpdateRemote(); Show("Settings"); }));
+        if (S.RemoteOn)
+        {
+            if (remote == null)
+                phone.Controls.Add(Ui.Lbl("Couldn't start: " + remoteError, Theme.Body, Theme.Warn, Ui.PageW - 40));
+            else
+            {
+                phone.Controls.Add(Ui.Lbl("On your phone, open:", Theme.Body, Theme.Muted, Ui.PageW - 40));
+                foreach (var url in RemoteServer.Addresses())
+                {
+                    var u = url;
+                    phone.Controls.Add(Ui.Lbl(u, new Font("Segoe UI Semibold", 16f), Theme.Text));
+                    phone.Controls.Add(Ui.Btn("Copy", () => Clipboard.SetText(u)));
+                }
+                phone.Controls.Add(Ui.Lbl("Sign in with your Syntra username and password. If Windows asks about the firewall, allow Private networks.", Theme.Body, Theme.Muted, Ui.PageW - 40));
+            }
+        }
+        page.Controls.Add(phone);
 
         var acc = Account.Load();
         var a = Ui.Card("Account", acc.Exists ? $"{acc.Name} · @{acc.Username}" : "No account.");
