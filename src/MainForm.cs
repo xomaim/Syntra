@@ -90,8 +90,8 @@ class MainForm : Form
         {
             var it = new ToolStripMenuItem(text)
             {
-                AutoSize = false, Size = new Size(280, 36), TextAlign = ContentAlignment.MiddleLeft,
-                ShortcutKeyDisplayString = keys, ShowShortcutKeys = keys != "",
+                AutoSize = false, Size = new Size(300, 36), TextAlign = ContentAlignment.MiddleLeft,
+                ShowShortcutKeys = false, Tag = keys,
             };
             it.Click += (_, _) => a();
             menu.Items.Add(it);
@@ -99,8 +99,10 @@ class MainForm : Form
         Item("Open Syntra", ShowFromTray);
         Item("Colours on / off", ToggleEnabled, "Ctrl+Alt+V");
         Item("Put my screen back to normal", () => { S.Enabled = false; ApplyNow(); S.Save(); });
-        menu.Items.Add(new ToolStripSeparator { AutoSize = false, Size = new Size(280, 9) });
+        menu.Items.Add(new ToolStripSeparator { AutoSize = false, Size = new Size(300, 9) });
         Item("Exit", Program.ExitApp);
+        menu.AutoSize = false;
+        menu.Size = new Size(308, menu.Padding.Vertical + 4 * 36 + 9 + 4);
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => ShowFromTray();
 

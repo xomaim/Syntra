@@ -488,11 +488,13 @@ class DarkMenuRenderer : ToolStripProfessionalRenderer
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
         var item = e.Item;
-        bool shortcut = item is ToolStripMenuItem mi && mi.ShortcutKeyDisplayString == e.Text && e.Text != item.Text;
+        var font = e.TextFont ?? item.Font;
         var box = new Rectangle(16, 0, item.Width - 32, item.Height);
-        TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont ?? item.Font, box,
-            shortcut ? Theme.Muted : item.Enabled ? Theme.Text : Theme.Muted,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | (shortcut ? TextFormatFlags.Right : TextFormatFlags.Left));
+        TextRenderer.DrawText(e.Graphics, item.Text, font, box, item.Enabled ? Theme.Text : Theme.Muted,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.Left);
+        if (item.Tag is string keys && keys.Length > 0)
+            TextRenderer.DrawText(e.Graphics, keys, font, box, Theme.Muted,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.Right);
     }
 
     protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
