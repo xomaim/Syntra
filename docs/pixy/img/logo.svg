@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Pixy Studios">
+  <rect width="120" height="120" rx="30" fill="#0a0a0a"/>
+  <g fill="#fff">
+    <rect x="30" y="22" width="16" height="16" rx="4"/><rect x="48" y="22" width="16" height="16" rx="4"/><rect x="66" y="22" width="16" height="16" rx="4"/>
+    <rect x="30" y="40" width="16" height="16" rx="4"/><rect x="66" y="40" width="16" height="16" rx="4"/>
+    <rect x="30" y="58" width="16" height="16" rx="4"/><rect x="48" y="58" width="16" height="16" rx="4"/><rect x="66" y="58" width="16" height="16" rx="4"/>
+    <rect x="30" y="76" width="16" height="16" rx="4"/>
+  </g>
+  <rect x="80" y="80" width="12" height="12" rx="3" fill="#fff" opacity=".45"/>
+</svg>
