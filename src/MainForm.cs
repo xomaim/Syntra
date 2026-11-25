@@ -735,7 +735,7 @@ class MainForm : Form
 
         var card = Ui.Card();
         var preview = new CrosshairPreview(c, 420, 250);
-        void Redraw() { preview.Invalidate(); overlay?.Invalidate(); }
+        void Redraw() { preview.Invalidate(); if (overlay != null) { overlay.Recenter(); overlay.Invalidate(); } }
         var controls = new FlowLayoutPanel { FlowDirection = FlowDirection.TopDown, AutoSize = true, BackColor = Theme.Card, WrapContents = false, Margin = new Padding(0) };
         controls.Controls.Add(Ui.Toggle("Show crosshair", c.On, v => { c.On = v; ShowCrosshair(v); S.Save(); }));
         var style = Ui.Combo(new[] { "Cross", "T", "Dot", "Circle" }, 380);
@@ -752,6 +752,47 @@ class MainForm : Form
         Sl("Size", 2, 60, c.Size, 10, v => c.Size = v);
         Sl("Thickness", 1, 8, c.Thickness, 2, v => c.Thickness = v);
         Sl("Gap", 0, 20, c.Gap, 3, v => c.Gap = v);
+
+        // Size scale for every crosshair: slider is logarithmic so 0.01× and 50× are both easy to reach.
+        static string Fmt(double v) => v < 1 ? $"{v:0.00}×" : v < 10 ? $"{v:0.0#}×" : $"{v:0.#}×";
+        var scaleRow = new FlowLayoutPanel { AutoSize = true, BackColor = Theme.Card, WrapContents = false, Margin = new Padding(0) };
+        var scale = new DarkSlider("Size scale (all crosshairs)", Math.Log10(CrosshairSettings.MinScale), Math.Log10(CrosshairSettings.MaxScale),
+            Math.Log10(Math.Clamp(c.Scale, CrosshairSettings.MinScale, CrosshairSettings.MaxScale)), 0, 270)
+        { Step = 0.001, Format = v => Fmt(Math.Pow(10, v)), Mark = 0 };
+        var exact = new DarkInput("1.00", 100);
+        exact.Box.Text = c.Scale.ToString("0.##");
+        void SetScale(double v, bool fromBox)
+        {
+            v = Math.Round(Math.Clamp(v, CrosshairSettings.MinScale, CrosshairSettings.MaxScale), 2);
+            c.Scale = v;
+            if (fromBox) scale.SetValue(Math.Log10(v)); else exact.Box.Text = v.ToString("0.##");
+            Redraw();
+        }
+        scale.Changed += v => SetScale(Math.Pow(10, v), false);
+        scale.Released += () => S.Save();
+        exact.Box.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            if (double.TryParse(exact.Box.Text.Replace("×", "").Replace("x", "").Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var v)) { SetScale(v, true); S.Save(); }
+        };
+        exact.Box.LostFocus += (_, _) =>
+        {
+            if (double.TryParse(exact.Box.Text.Replace("×", "").Replace("x", "").Trim(), System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var v)) { SetScale(v, true); S.Save(); }
+        };
+        exact.Margin = new Padding(4, 12, 4, 4);
+        scaleRow.Controls.Add(scale);
+        scaleRow.Controls.Add(exact);
+        controls.Controls.Add(scaleRow);
+        var quick = new FlowLayoutPanel { AutoSize = true, BackColor = Theme.Card, WrapContents = false, Margin = new Padding(0) };
+        foreach (var q in new[] { 0.5, 1, 2, 5, 10 })
+        {
+            var qq = q;
+            quick.Controls.Add(Ui.Btn(Fmt(q), () => { SetScale(qq, true); S.Save(); }));
+        }
+        controls.Controls.Add(quick);
         card.Controls.Add(preview);
         card.Controls.Add(controls);
         page.Controls.Add(card);

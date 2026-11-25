@@ -812,7 +812,9 @@ static class CrosshairArt
     public static void Draw(Graphics g, CrosshairSettings s, int c, int cy)
     {
         g.SmoothingMode = SmoothingMode.None;
-        int t = Math.Max(1, s.Thickness), len = s.Size, gap = s.Gap, half = t / 2;
+        double sc = Math.Clamp(s.Scale, CrosshairSettings.MinScale, CrosshairSettings.MaxScale);
+        int t = Math.Max(1, (int)Math.Round(s.Thickness * sc)), len = Math.Max(1, (int)Math.Round(s.Size * sc)),
+            gap = (int)Math.Round(s.Gap * sc), half = t / 2;
         var col = Color.FromArgb(s.Argb);
         var rects = new List<Rectangle>();
         switch (s.Style)
@@ -821,7 +823,7 @@ static class CrosshairArt
                 rects.Add(new Rectangle(c - t - 1, cy - t - 1, t * 2 + 2, t * 2 + 2));
                 break;
             case "Circle":
-                if (s.Outline) using (var op = new Pen(Color.FromArgb(s.OutlineArgb), t + 2 * Math.Max(1, s.OutlineWidth))) g.DrawEllipse(op, c - len, cy - len, len * 2, len * 2);
+                if (s.Outline) using (var op = new Pen(Color.FromArgb(s.OutlineArgb), t + 2 * Math.Max(1, (int)Math.Round(s.OutlineWidth * sc)))) g.DrawEllipse(op, c - len, cy - len, len * 2, len * 2);
                 using (var p = new Pen(col, t)) g.DrawEllipse(p, c - len, cy - len, len * 2, len * 2);
                 break;
             case "T":
@@ -839,7 +841,7 @@ static class CrosshairArt
         if (s.CenterDot && s.Style != "Dot") rects.Add(new Rectangle(c - half, cy - half, t, t));
         if (s.Outline)
         {
-            int ow = Math.Max(1, s.OutlineWidth);
+            int ow = Math.Max(1, (int)Math.Round(s.OutlineWidth * sc));
             using var ob = new SolidBrush(Color.FromArgb(s.OutlineArgb));
             foreach (var r in rects) g.FillRectangle(ob, Rectangle.Inflate(r, ow, ow));
         }
@@ -886,7 +888,15 @@ class CrosshairOverlay : Form
 {
     readonly CrosshairSettings s;
     readonly System.Windows.Forms.Timer keepOnTop = new() { Interval = 2000 };
-    const int Box = 160;
+    int Box = 160;
+
+    public static int Needed(CrosshairSettings s)
+    {
+        double sc = Math.Clamp(s.Scale, CrosshairSettings.MinScale, CrosshairSettings.MaxScale);
+        int reach = (int)Math.Ceiling((s.Size + s.Gap + s.Thickness + 2 * s.OutlineWidth) * sc) + 6;
+        var b = Screen.PrimaryScreen!.Bounds;
+        return Math.Min(Math.Max(b.Width, b.Height), Math.Max(40, reach * 2));
+    }
 
     public CrosshairOverlay(CrosshairSettings settings)
     {
@@ -913,6 +923,8 @@ class CrosshairOverlay : Form
 
     public void Recenter()
     {
+        int need = Needed(s);
+        if (need != Box) { Box = need; Size = new Size(Box, Box); Invalidate(); }
         var b = Screen.PrimaryScreen!.Bounds;
         var p = new Point(b.Left + b.Width / 2 - Box / 2, b.Top + b.Height / 2 - Box / 2);
         if (Location != p) Location = p;

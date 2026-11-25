@@ -51,6 +51,8 @@ public class CrosshairSettings
     public bool CenterDot { get; set; }
     public int OutlineArgb { get; set; } = unchecked((int)0xFF000000);
     public int OutlineWidth { get; set; } = 1;
+    public double Scale { get; set; } = 1.0;   // 0.01× – 50×, applies to every crosshair
+    public const double MinScale = 0.01, MaxScale = 50;
 
     public CrosshairSettings Copy() => (CrosshairSettings)MemberwiseClone();
 
