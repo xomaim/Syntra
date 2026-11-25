@@ -7,14 +7,14 @@
   "hero": {
     "lines": ["Push Colour", "To 300%.", "Any Game."],
     "lead": "Syntra is a Windows colour app for gamers. It changes what your monitor shows — never the game.",
-    "meta": ["Free", "no card", "Windows 10 & 11", "one file"]
+    "meta": ["Free", "no card", "Windows 10 & 11", "nothing else to install"]
   },
   "marquee": ["Saturation to 300%", "Vibrance", "Hue changer", "Crosshairs", "Stretched 4:3", "Game profiles", "Phone control", "Themes", "Auto-updates", "No injection", "No drivers"],
   "stats": [
     { "value": 300, "suffix": "%", "label": "max saturation" },
     { "value": 15, "suffix": "ms", "label": "slider response" },
     { "value": 0, "suffix": "", "label": "drivers installed" },
-    { "value": 1, "suffix": "", "label": "file to download" }
+    { "value": 1, "suffix": "", "label": "download, that's it" }
   ],
   "presets": [
     { "name": "Balanced", "sat": 100, "hue": 0 },
@@ -37,6 +37,7 @@
     { "icon": "brush", "title": "Make it yours", "text": "Eight themes, your accent colour, a background picture, a see-through window." },
     { "icon": "shield", "title": "Updates itself", "text": "Installs in a click, adds a shortcut, and keeps itself on the newest version." }
   ],
+  "manifesto": "Syntra changes what your monitor shows. It never reads, changes or touches your games. No drivers. No injection. No admin. Just colour.",
   "safe": [
     { "title": "No memory reading", "text": "Syntra never reads a game's memory." },
     { "title": "No file changes", "text": "It never changes a game's files." },
@@ -54,7 +55,7 @@
     { "q": "Will 300% saturation hurt my monitor?", "a": "No. It only changes the colours your PC sends, like a very colourful picture. Normal LCD monitors don't get burn-in. On OLED, watch out for any bright image that stays in one spot for hours — like a crosshair." },
     { "q": "Does it work with NVIDIA and AMD?", "a": "Yes. On NVIDIA, Syntra also uses your driver's own Digital Vibrance. Everything else works on any graphics card." },
     { "q": "Why does Windows say it protected my PC?", "a": "Syntra is new and not code-signed yet. Click More info, then Run anyway. You can check your copy is official in Settings → Verify this copy." },
-    { "q": "Do I need to install anything else?", "a": "No. One file. No .NET, no Python, no installer — it sets itself up and adds a shortcut." },
+    { "q": "Do I need to install anything else?", "a": "No. Just Syntra. No .NET, no Python, no installer — it sets itself up and adds a shortcut." },
     { "q": "What does it cost?", "a": "Syntra is free." }
   ]
 }

@@ -83,7 +83,9 @@ function build(d) {
   document.querySelectorAll(".stat").forEach(s => counter.observe(s));
 
   // features
-  $("grid").innerHTML = d.features.map(f => `<div class="f rv"><div class="ic"><svg viewBox="0 0 24 24">${ICON[f.icon] || ""}</svg></div><h3>${esc(f.title)}</h3><p>${esc(f.text)}</p></div>`).join("");
+  $("words").innerHTML = d.manifesto.split(" ").map(w => `<span>${esc(w)} </span>`).join("");
+  $("grid").innerHTML = d.features.map((f, i) => `<div class="f"><div class="ic"><svg viewBox="0 0 24 24">${ICON[f.icon] || ""}</svg></div><h3>${esc(f.title)}</h3><p>${esc(f.text)}</p><div class="num">${String(i + 1).padStart(2, "0")}</div></div>`).join("");
+  stories();
   document.querySelectorAll(".f").forEach(card => card.addEventListener("pointermove", e => {
     const r = card.getBoundingClientRect();
     card.style.setProperty("--fx", (e.clientX - r.left) + "px"); card.style.setProperty("--fy", (e.clientY - r.top) + "px");
@@ -101,7 +103,7 @@ function build(d) {
 // ---------- hero slider: every picture on the page follows it ----------
 const hs = $("hsat");
 function hero(v) {
-  hs.value = v;
+  hs.value = v; fill(hs);
   document.documentElement.style.setProperty("--sat", v / 100);
   $("hsatv").textContent = v === 100 ? "" : v + "%";
 }
@@ -143,8 +145,33 @@ function reveal() {
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .12 });
   document.querySelectorAll(".rv").forEach((el, i) => { el.style.transitionDelay = (i % 3) * 80 + "ms"; io.observe(el); });
 }
+// progress (0..1) of a tall pinned section
+const prog = el => { const r = el.getBoundingClientRect(); return Math.min(1, Math.max(0, -r.top / (r.height - innerHeight))); };
+function stories() {
+  const st = $("story");
+  if (st) {
+    const k = prog(st), v = Math.round(k * 300);
+    st.style.setProperty("--k", k); st.style.setProperty("--s", v / 100);
+    $("storyn").textContent = v + "%";
+    $("storyl").textContent = v < 15 ? "Scroll to turn Syntra up" : v < 100 ? "Black & white…" : v < 110 ? "As the game ships" : v < 250 ? "Syntra on" : "Full Syntra";
+  }
+  const rail = $("features"), track = $("grid");
+  if (rail && track) {
+    const k = prog(rail), max = Math.max(0, track.scrollWidth - innerWidth);
+    rail.style.setProperty("--k", k); track.style.setProperty("--tx", (-k * max) + "px");
+  }
+  const words = document.querySelectorAll("#words span");
+  if (words.length) {
+    const r = $("manifesto").getBoundingClientRect();
+    const k = Math.min(1, Math.max(0, (innerHeight * .85 - r.top) / (r.height + innerHeight * .2)));
+    const n = Math.round(k * words.length);
+    words.forEach((w, i) => w.classList.toggle("on", i < n));
+  }
+}
 let lastY = 0;
+addEventListener("resize", stories);
 addEventListener("scroll", () => {
+  stories();
   const y = scrollY;
   if (!reduce) {
     document.querySelector(".hero .bg").style.setProperty("--py", y * .35 + "px");
