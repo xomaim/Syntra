@@ -1126,8 +1126,8 @@ class MainForm : Form
         page.Controls.Add(gen);
 
         var web = Ui.Card("Control from anywhere", "Open this on your phone — any Wi-Fi or mobile data — and sign in with your Syntra account.");
-        web.Controls.Add(Ui.Lbl("xomaim.github.io/Syntra", new Font("Segoe UI Semibold", 16f), Theme.Text));
-        web.Controls.Add(Ui.Btn("Open", () => { try { Process.Start(new ProcessStartInfo("https://xomaim.github.io/Syntra/") { UseShellExecute = true }); } catch { } }, true));
+        web.Controls.Add(Ui.Lbl("Syntra Control (open in the Claude app or claude.ai)", new Font("Segoe UI Semibold", 13f), Theme.Text));
+        web.Controls.Add(Ui.Btn("Open", () => { try { Process.Start(new ProcessStartInfo("https://claude.ai/artifact/4SF3KuxQLS1C5AXyTeRH8K") { UseShellExecute = true }); } catch { } }, true));
         var accNow = Account.Load();
         web.Controls.Add(Ui.Lbl(accNow.CloudUserId.Length > 0 ? "✓  This PC is linked to your account." : "Log out and back in once to link this PC.", Theme.Body, accNow.CloudUserId.Length > 0 ? Theme.Good : Theme.Muted, Ui.PageW - 40));
         page.Controls.Add(web);
