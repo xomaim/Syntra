@@ -172,6 +172,9 @@ class MainForm : Form
             if (System.Text.Json.Nodes.JsonNode.Parse(body) is System.Text.Json.Nodes.JsonObject j)
             {
                 var L = ActiveLook;
+                // Moving a colour slider from the phone means "show it": switch colours on unless the phone also said otherwise.
+                if (!j.ContainsKey("enabled") && j.Any(kv => kv.Key is "saturation" or "vibrance" or "brightness" or "contrast" or "gamma" or "temperature" or "preset" or "hueDegrees" or "hueOn"))
+                    S.Enabled = true;
                 foreach (var (k, v) in j)
                 {
                     if (v == null) continue;

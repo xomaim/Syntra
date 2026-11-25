@@ -182,6 +182,7 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.25)}
       <div class="card hero">
         <div class="row"><span class="name">Saturation</span><span class="val" id="v_saturation">100%</span></div>
         <input type="range" id="saturation" min="0" max="300" step="1" value="100">
+        <div class="switch"><h3>Colours on</h3><button class="tg" id="enabled" aria-label="Colours on"></button></div>
         <div class="chips">
           <button class="chip" data-sat="100">100%</button><button class="chip" data-sat="150">150%</button>
           <button class="chip" data-sat="200">200%</button><button class="chip" data-sat="250">250%</button>
@@ -190,7 +191,6 @@ input[type=range]:active::-webkit-slider-thumb{transform:scale(1.25)}
       </div>
       <div class="card" id="fine"><h3>Fine tune</h3></div>
       <div class="card">
-        <div class="switch"><h3>Colours on</h3><button class="tg" id="enabled" aria-label="Colours on"></button></div>
         <div class="switch"><h3>Hue changer</h3><button class="tg" id="hueOn" aria-label="Hue changer"></button></div>
         <div class="slider"><div class="row"><span class="name">Hue shift</span><span class="val" id="v_hueDegrees">0°</span></div>
         <input type="range" id="hueDegrees" min="-180" max="180" step="1" value="0"></div>
@@ -324,7 +324,10 @@ function renderSettings(s) {
   }
 }
 
-function queue(k, v) { if (!device) return; pending[k] = v; if (!timer) timer = setTimeout(send, 120); }
+function queue(k, v) {
+  if (!device) return;
+  if (k !== "enabled" && !$("enabled").classList.contains("on")) { $("enabled").classList.add("on"); toast("Colours switched on"); }
+  pending[k] = v; if (!timer) timer = setTimeout(send, 120); }
 async function send() {
   const changes = pending; pending = {};
   try {
