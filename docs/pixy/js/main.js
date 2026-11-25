@@ -1,7 +1,7 @@
 // Pixy Studios — edit the PROJECTS list to add or change cards.
 {
 const PROJECTS = [
-  { name: "Mini Client", tag: "Project", text: "More details coming soon.", mark: "M", link: "" },
+  { name: "Mini Client", tag: "Out now", text: "A cleaner Minecraft experience — a simple, uncluttered launcher for Minecraft Java Edition.", mark: "M", link: "https://miniclient.pages.dev" },
   { name: "Syntra", tag: "Out now", text: "A colour booster for Windows gaming. Push saturation to 300% in any game.", mark: "S",
     link: "https://raw.githack.com/xomaim/Syntra/main/docs/site/index.html", dark: true },
   { soon: true },
