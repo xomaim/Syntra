@@ -292,33 +292,27 @@ class MainForm : Form
         try
         {
             var acc = Account.Load();
-            var dev = await Cloud.GetDevice(acc);
-            if (dev == null) return;
-            var st = dev["settings"] as JsonObject;
+            if (acc.CloudRefresh.Length == 0) return;
+            JsonObject? mine = null;
+            if (cloudChanged || (DateTime.UtcNow - cloudBeat).TotalSeconds > 25)
+            {
+                mine = JsonNode.Parse(RemoteState()) as JsonObject ?? new JsonObject();
+                mine["rev"] = cloudRev + 1; mine["by"] = "pc";
+            }
+            var st = await Cloud.Sync(acc, cloudChanged ? mine : null);
+            cloudBeat = DateTime.UtcNow;
+            if (st == null) return;
             long rev = 0;
-            try { rev = st?["rev"]?.GetValue<long>() ?? 0; } catch { }
-            string by = (string?)st?["by"] ?? "";
-            if (by == "web" && rev > cloudRev && st != null)
+            try { rev = st["rev"]?.GetValue<long>() ?? 0; } catch { }
+            string by = (string?)st["by"] ?? "";
+            if (cloudChanged) { cloudChanged = false; cloudRev = Math.Max(cloudRev + 1, rev); }
+            if (by == "web" && rev > cloudRev)
             {
                 cloudRev = rev;
                 var changes = st["changes"] as JsonObject ?? st;
                 cloudApplying = true;
                 try { RemoteSet(changes.ToJsonString()); } finally { cloudApplying = false; }
-                cloudChanged = true; // send back the full, applied state
-            }
-            if (cloudChanged)
-            {
-                cloudChanged = false;
-                cloudRev = Math.Max(cloudRev, rev) + 1;
-                var mine = JsonNode.Parse(RemoteState()) as JsonObject ?? new JsonObject();
-                mine["rev"] = cloudRev; mine["by"] = "pc";
-                await Cloud.Push(acc, mine);
-                cloudBeat = DateTime.UtcNow;
-            }
-            else if ((DateTime.UtcNow - cloudBeat).TotalSeconds > 25)
-            {
-                await Cloud.Push(acc, null); // "online" heartbeat
-                cloudBeat = DateTime.UtcNow;
+                cloudChanged = true; // report the applied state back
             }
         }
         catch { }
