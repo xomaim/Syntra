@@ -1126,8 +1126,25 @@ class MainForm : Form
         page.Controls.Add(gen);
 
         var web = Ui.Card("Control from anywhere", "Open this on your phone — any Wi-Fi or mobile data — and sign in with your Syntra account.");
-        web.Controls.Add(Ui.Lbl("raw.githack.com/xomaim/Syntra/main/docs", new Font("Segoe UI Semibold", 13f), Theme.Text));
-        web.Controls.Add(Ui.Btn("Open", () => { try { Process.Start(new ProcessStartInfo("https://raw.githack.com/xomaim/Syntra/main/docs/index.html") { UseShellExecute = true }); } catch { } }, true));
+        const string ControlUrl = "https://tinyurl.com/2betund3";
+        web.Controls.Add(Ui.Lbl("tinyurl.com/2betund3", new Font("Segoe UI Semibold", 18f), Theme.Text));
+        web.Controls.Add(Ui.Btn("Open", () => { try { Process.Start(new ProcessStartInfo(ControlUrl) { UseShellExecute = true }); } catch { } }, true));
+        web.Controls.Add(Ui.Btn("Copy link", () => Clipboard.SetText(ControlUrl)));
+        // QR code: point your phone camera at it
+        var qr = new PictureBox { Size = new Size(180, 180), SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White, Margin = new Padding(4, 8, 16, 4) };
+        web.Controls.Add(qr);
+        web.Controls.Add(Ui.Lbl("Scan with your phone camera to open it.", Theme.Body, Theme.Muted));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+                var bytes = await http.GetByteArrayAsync("https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data=" + Uri.EscapeDataString(ControlUrl));
+                var img = Image.FromStream(new MemoryStream(bytes));
+                if (!qr.IsDisposed) qr.BeginInvoke(() => { if (!qr.IsDisposed) qr.Image = img; });
+            }
+            catch { }
+        });
         var accNow = Account.Load();
         web.Controls.Add(Ui.Lbl(accNow.CloudUserId.Length > 0 ? "✓  This PC is linked to your account." : "Log out and back in once to link this PC.", Theme.Body, accNow.CloudUserId.Length > 0 ? Theme.Good : Theme.Muted, Ui.PageW - 40));
         page.Controls.Add(web);
