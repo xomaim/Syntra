@@ -8,7 +8,7 @@
     "lines": ["Push More", "Colour Than"],
     "rotate": ["NVIDIA.", "Your Driver.", "Ever Before."],
     "note": "NVIDIA's vibrance stops at 100%. Syntra keeps going to 300%.",
-    "lead": "Syntra is a Windows colour app for gamers. It changes what your monitor shows — never the game.",
+    "lead": "Syntra is a colour booster for Windows gaming. It reworks the picture going to your display and leaves your games alone.",
     "meta": ["Free", "no card", "Windows 10 & 11", "nothing else to install"]
   },
   "marquee": ["Saturation to 300%", "Vibrance", "Hue changer", "Crosshairs", "Stretched 4:3", "Game profiles", "Phone control", "Themes", "Auto-updates", "No injection", "No drivers"],
@@ -19,19 +19,19 @@
     { "value": 1, "suffix": "", "label": "download, that's it" }
   ],
   "presets": [
-    { "name": "Balanced", "sat": 100, "hue": 0 },
-    { "name": "Vivid", "sat": 221, "hue": 0 },
-    { "name": "Forest", "sat": 230, "hue": -8 },
-    { "name": "Desert", "sat": 225, "hue": 6 },
-    { "name": "Snow", "sat": 215, "hue": -12 },
-    { "name": "Night", "sat": 180, "hue": 0 },
-    { "name": "Rust PvP", "sat": 242, "hue": -10 },
-    { "name": "Greyscale", "sat": 0, "hue": 0 }
+    { "name": "Default", "sat": 100, "hue": 0 },
+    { "name": "Punch", "sat": 221, "hue": 0 },
+    { "name": "Evergreen", "sat": 230, "hue": -8 },
+    { "name": "Dune", "sat": 225, "hue": 6 },
+    { "name": "Frost", "sat": 215, "hue": -12 },
+    { "name": "Midnight", "sat": 180, "hue": 0 },
+    { "name": "Raider", "sat": 242, "hue": -10 },
+    { "name": "Mono", "sat": 0, "hue": 0 }
   ],
   "features": [
     { "icon": "display", "title": "Saturation to 300%", "text": "Go past your driver's limit. Plus vibrance, brightness, contrast, gamma, temperature, shadows and highlights." },
     { "icon": "hue", "title": "Hue changer", "text": "Shift colours on the whole screen — or on one app, like Discord, on any monitor." },
-    { "icon": "cross", "title": "Crosshair overlay", "text": "GTA PvP and more presets, your own colours and outlines, size from 0.01× to 50×." },
+    { "icon": "cross", "title": "Crosshair overlay", "text": "Street PvP and more presets, your own colours and outlines, size from 0.01× to 50×." },
     { "icon": "res", "title": "Resolution switcher", "text": "Every mode your screen supports and stretched 4:3 — with a 15-second safety undo." },
     { "icon": "mon", "title": "Monitor controls", "text": "Your monitor's real brightness and contrast, plus low blue light for late sessions." },
     { "icon": "pad", "title": "Game profiles", "text": "A look for each game, on when it's in front, put back when you leave." },
@@ -39,13 +39,13 @@
     { "icon": "brush", "title": "Make it yours", "text": "Eight themes, your accent colour, a background picture, a see-through window." },
     { "icon": "shield", "title": "Updates itself", "text": "Installs in a click, adds a shortcut, and keeps itself on the newest version." }
   ],
-  "manifesto": "Syntra changes what your monitor shows. It never reads, changes or touches your games. No drivers. No injection. No admin. Just colour.",
+  "manifesto": "Your games stay exactly as they are. Syntra only reworks the picture on its way to your screen. No drivers. Nothing hooked. No admin. Only colour.",
   "safe": [
-    { "title": "No memory reading", "text": "Syntra never reads a game's memory." },
-    { "title": "No file changes", "text": "It never changes a game's files." },
-    { "title": "No injection", "text": "It never puts code into a game or any other program." },
-    { "title": "No drivers", "text": "It installs no driver. Nothing runs at kernel level." },
-    { "title": "No admin needed", "text": "It runs as you. The repair button asks Windows first." }
+    { "title": "Hands off memory", "text": "Syntra doesn't look inside any running game." },
+    { "title": "Game files untouched", "text": "Your game installs stay exactly as they were." },
+    { "title": "Nothing hooked", "text": "No code is added to games or to other apps." },
+    { "title": "Zero drivers", "text": "Nothing is installed at system level." },
+    { "title": "Your own account", "text": "No admin rights. Repair asks Windows before it elevates." }
   ],
   "steps": [
     "Open Syntra on your PC and sign in.",
@@ -53,10 +53,10 @@
     "Sign in on your phone and drag. Your screen follows."
   ],
   "faq": [
-    { "q": "Can Syntra get me banned?", "a": "Syntra never touches a game — no memory reading, no injection, no file changes. It only changes what Windows sends to your monitor. Every game has its own rules, so it's always your job to check them." },
+    { "q": "Can Syntra get me banned?", "a": "Syntra leaves games alone: it doesn't look inside them, change their files or add code to them. It only adjusts the picture Windows sends to your display. Every game has its own rules, so it's always your job to check them." },
     { "q": "Will 300% saturation hurt my monitor?", "a": "No. It only changes the colours your PC sends, like a very colourful picture. Normal LCD monitors don't get burn-in. On OLED, watch out for any bright image that stays in one spot for hours — like a crosshair." },
     { "q": "Does it work with NVIDIA and AMD?", "a": "Yes. On NVIDIA, Syntra also uses your driver's own Digital Vibrance. Everything else works on any graphics card." },
-    { "q": "Why does Windows say it protected my PC?", "a": "Syntra is new and not code-signed yet. Click More info, then Run anyway. You can check your copy is official in Settings → Verify this copy." },
+    { "q": "Why does Windows say it protected my PC?", "a": "Syntra is new and not code-signed yet. Click More info, then Run anyway. You can check your copy is official in Settings → Is this copy genuine?." },
     { "q": "Do I need to install anything else?", "a": "No. Just Syntra. No .NET, no Python, no installer — it sets itself up and adds a shortcut." },
     { "q": "What does it cost?", "a": "Syntra is free." }
   ]

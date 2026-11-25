@@ -18,19 +18,19 @@ Windows SmartScreen may warn because the file isn't code-signed: click **More in
 | **Monitor** | Your monitor's real brightness/contrast over DDC/CI, low-blue-light |
 | **Crosshair** | Click-through overlay crosshair: cross / T / dot / circle, size, gap, thickness, colour, outline |
 | **Profiles** | A look per game — applied while that game is in front, put back when you leave it |
-| **Settings** | Launch with Windows, Ctrl+Alt+V on/off, "put my screen back", repair, SHA-256 of the running copy |
+| **Settings** | Start with your PC, Ctrl+Alt+V on/off, "put my screen back", repair, SHA-256 of the running copy |
 
-## What Syntra never does
+## How Syntra keeps your games clean
 
-* It never reads a game's memory.
-* It never changes a game's files.
-* It never puts code into a game, or into any other program.
-* It installs no driver.
-* It installs and runs as your own Windows user. It needs no admin rights. One repair button can restart it as admin. Windows asks you first.
+* Syntra doesn't look inside any running game.
+* Your game files stay exactly as they were.
+* No code is added to games or to other apps.
+* Nothing is installed at system level — no drivers.
+* It runs under your own Windows account. Admin rights only if you press Repair, and Windows asks first.
 
 ### How that's possible
 
-Syntra only uses ordinary Windows features that change **what the monitor shows**:
+Syntra only uses standard Windows display features to rework the picture:
 
 * **Colour matrix** — `MagSetFullscreenColorEffect` (Windows' own compositor, same as the accessibility colour filters).
 * **Gamma ramp** — `SetDeviceGammaRamp`.

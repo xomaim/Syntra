@@ -442,13 +442,13 @@ class MainForm : Form
         string status = !S.Enabled ? "● Off" : activeGame != null ? $"● Live · {activeGame}" : "● Live";
         var live = Ui.Lbl(status, Theme.H2, S.Enabled ? Theme.Good : Theme.Muted);
         live.Margin = new Padding(4, 10, 12, 4);
-        page.Controls.Add(Ui.Header("Display", "Presets are starting points. The sliders work in whatever you play.",
+        page.Controls.Add(Ui.Header("Display", "Pick a preset, then fine-tune it for any game.",
             live,
             Ui.Btn(S.Enabled ? "Turn off" : "Turn on", ToggleEnabled),
             Ui.Btn("Reset", () => { CopyInto(new Look(), L); Changed(); Show("Display"); })));
 
         var top = Ui.Card();
-        var sat = new DarkSlider("Saturation   (100 = the game as it ships)", 0, 300, L.Saturation, 100, 400) { Format = v => $"{v:0}%", Mark = 100 };
+        var sat = new DarkSlider("Saturation   (100 = untouched)", 0, 300, L.Saturation, 100, 400) { Format = v => $"{v:0}%", Mark = 100 };
         sat.Changed += v => { L.Saturation = v; Changed(); };
         string vibNote = ColorEngine.HasDriverVibrance ? "NVIDIA driver vibrance" : "software";
         var vib = new DarkSlider($"Vibrance   (50 = normal · {vibNote})", 0, 100, L.Vibrance, 50, 400) { Format = v => $"{v:0}%", Mark = 50 };
@@ -616,7 +616,7 @@ class MainForm : Form
     {
         var page = Ui.Page();
         ddc ??= new MonitorDdc();
-        page.Controls.Add(Ui.Header("Monitor", "Your monitor's own settings, without reaching round the back.",
+        page.Controls.Add(Ui.Header("Monitor", "Change your display's hardware brightness and contrast from here.",
             Ui.Btn("Restore my monitor", () =>
             {
                 ddc.SetBrightness(ddc.OrigBrightness); ddc.SetContrast(ddc.OrigContrast);
@@ -975,7 +975,7 @@ class MainForm : Form
     Control BuildCustomize()
     {
         var page = Ui.Page();
-        page.Controls.Add(Ui.Header("Customize", "How Syntra itself looks. Game colours are set on Display."));
+        page.Controls.Add(Ui.Header("Customize", "Themes and backgrounds for Syntra. Game colour lives on Display."));
 
         var themes = Ui.Card("Theme", $"Now: {Theme.Current.Name}");
         foreach (var t in Theme.Presets)
@@ -1123,10 +1123,10 @@ class MainForm : Form
     Control BuildSettings()
     {
         var page = Ui.Page();
-        page.Controls.Add(Ui.Header("Settings", "How Syntra itself behaves.  ·  Syntra by Pixy Studios"));
+        page.Controls.Add(Ui.Header("Settings", "Startup, updates, account and safety.  ·  Syntra by Pixy Studios"));
 
         var gen = Ui.Card();
-        gen.Controls.Add(Ui.Toggle("Launch with Windows", Startup.IsOn(), v => Startup.Set(v)));
+        gen.Controls.Add(Ui.Toggle("Start Syntra when my PC starts", Startup.IsOn(), v => Startup.Set(v)));
         gen.Controls.Add(Ui.Toggle("Update by itself", S.AutoUpdate, v => { S.AutoUpdate = v; S.Save(); }));
         gen.Controls.Add(Ui.Lbl($"Version {Updater.Current} · {Updater.LastStatus}", Theme.Body, Theme.Muted, Ui.PageW - 40));
         gen.Controls.Add(Ui.Btn("Check for updates now", async () =>
@@ -1201,20 +1201,20 @@ class MainForm : Form
         }));
         page.Controls.Add(a);
 
-        var promise = Ui.Card("Safe by design", "Syntra only changes what your monitor shows. It never touches your games.");
+        var promise = Ui.Card("Built to stay clean", "Syntra only adjusts the picture Windows sends to your display. Your games stay untouched.");
         foreach (var (t, d) in new[]
         {
-            ("No memory reading", "Never reads a game's memory."),
-            ("No file changes", "Never changes a game's files."),
-            ("No injection", "Never puts code into a game or any other program."),
-            ("No drivers", "Installs no driver. Nothing runs at kernel level."),
-            ("No admin needed", "Runs as you. Repair asks Windows first."),
+            ("Hands off memory", "Syntra doesn't look inside any running game."),
+            ("Game files untouched", "Your game installs stay exactly as they were."),
+            ("Nothing hooked", "No code is added to games or to other apps."),
+            ("Zero drivers", "Nothing is installed at system level."),
+            ("Your own account", "No admin rights. Repair asks Windows before it elevates."),
             ("Official builds", "Every version comes from Pixy Studios. Check yours below."),
         })
             promise.Controls.Add(new PromiseTile(t, d));
         page.Controls.Add(promise);
 
-        var verify = Ui.Card("Verify this copy", "The fingerprint (SHA-256) of the Syntra.exe now running. It should match the official Pixy Studios release.");
+        var verify = Ui.Card("Is this copy genuine?", "The fingerprint (SHA-256) of the Syntra you are running, checked against the official Pixy Studios release.");
         string hash;
         try { using var fs = File.OpenRead(Environment.ProcessPath!); hash = Convert.ToHexString(SHA256.HashData(fs)).ToLowerInvariant(); }
         catch { hash = "unavailable"; }

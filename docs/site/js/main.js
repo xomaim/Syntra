@@ -165,7 +165,7 @@ function stories() {
     const k = prog(st), v = Math.round(k * 300);
     st.style.setProperty("--k", k); st.style.setProperty("--s", v / 100);
     $("storyn").textContent = v + "%";
-    $("storyl").textContent = v < 15 ? "Scroll to turn Syntra up" : v < 100 ? "Black & white…" : v < 110 ? "As the game ships" : v < 250 ? "Syntra on" : "Full Syntra";
+    $("storyl").textContent = v < 15 ? "Scroll to turn Syntra up" : v < 100 ? "Black & white…" : v < 110 ? "Untouched" : v < 250 ? "Syntra on" : "Full Syntra";
   }
   const rail = $("features"), track = $("grid");
   if (rail && track) {

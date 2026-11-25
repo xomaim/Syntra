@@ -370,7 +370,7 @@ SLIDERS.forEach(k => {
 });
 document.querySelectorAll("[data-sat]").forEach(c => c.onclick = () => { $("saturation").value = c.dataset.sat; paint($("saturation"), true); queue("saturation", +c.dataset.sat); });
 ["enabled", "hueOn"].forEach(k => $(k).onclick = () => { const on = !$(k).classList.contains("on"); $(k).classList.toggle("on", on); queue(k, on); });
-$("reset").onclick = () => { queue("preset", "Balanced"); toast("Back to normal"); };
+$("reset").onclick = () => { queue("preset", "Default"); toast("Back to normal"); };
 
 // swipe dots
 const deck = $("deck"), cards = [...deck.children];

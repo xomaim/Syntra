@@ -338,7 +338,7 @@ document.querySelectorAll("[data-sat]").forEach(c => c.onclick = () => {
 ["enabled","hueOn"].forEach(k => $(k).onclick = () => {
   const on = !$(k).classList.contains("on"); $(k).classList.toggle("on", on); queue(k, on);
 });
-$("reset").onclick = () => queue("preset", "Balanced");
+$("reset").onclick = () => queue("preset", "Default");
 $("out").onclick = () => signOut();
 
 let presetsShown = "";

@@ -7,7 +7,7 @@
 <meta name="description" content="Syntra makes your games pop: saturation up to 300%, vibrance, hue, crosshairs, resolution and phone control, without touching the game.">
 <meta name="theme-color" content="#000000">
 <meta property="og:title" content="Syntra · Push colour to 300%">
-<meta property="og:description" content="A Windows colour app for gamers. It changes what your monitor shows — never the game.">
+<meta property="og:description" content="A colour booster for Windows gaming. It reworks the picture going to your display and leaves your games alone.">
 <meta property="og:image" content="img/valley.jpg">
 <link rel="icon" href="img/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,7 +33,7 @@
     <h1 class="big" id="headline"></h1>
     <div class="rainbow">
       <input type="range" id="hsat" min="0" max="300" value="100" aria-label="Try the saturation">
-      <div class="scale"><span>0</span><span class="mid">100 · as it ships</span><span>300%</span></div>
+      <div class="scale"><span>0</span><span class="mid">100 · untouched</span><span>300%</span></div>
       <div class="satnum" id="hsatv"></div>
       <p class="note" id="note"></p>
     </div>
@@ -55,19 +55,19 @@
   <div class="pin">
     <div class="pic" aria-hidden="true"></div><div class="shade" aria-hidden="true"></div>
     <div class="readout"><div class="l">Saturation</div><div class="n" id="storyn">0%</div><div class="l" id="storyl">Scroll to turn Syntra up</div></div>
-    <div class="cap">0 · 100 as it ships · 300</div>
+    <div class="cap">0 · 100 untouched · 300</div>
     <div class="bar"><i></i></div>
   </div>
 </section>
 
 <section class="band" id="compare">
   <div class="wrap center">
-    <div class="rv"><div class="kicker">See the difference</div><h2>Drag to see Syntra on.</h2>
-      <p class="sub">Left is the game as it ships. Right is with Syntra. Pick a preset or move the split.</p></div>
+    <div class="rv"><div class="kicker">Before / After</div><h2>Slide it. Feel it.</h2>
+      <p class="sub">Left: untouched. Right: Syntra on. Choose a preset or drag the line.</p></div>
     <div class="compare rv" id="cmp">
       <img class="before" src="img/valley.jpg" alt="A sunset valley, normal colours" draggable="false">
       <img class="after" src="img/valley.jpg" alt="" draggable="false">
-      <span class="tag l">As it ships</span><span class="tag r" id="cmptag">Syntra · 221%</span>
+      <span class="tag l">Untouched</span><span class="tag r" id="cmptag">Syntra · 221%</span>
       <div class="handle"></div>
     </div>
     <div class="presets" id="presets"></div>
@@ -84,9 +84,9 @@
       <div class="abody">
         <aside class="aside" id="aside"></aside>
         <div class="amain">
-          <div class="acard ahead"><div><h3>Display</h3><p>Presets are starting points. The sliders work in whatever you play.</p></div><div class="alive">● Live</div><button class="abtn" id="areset">Reset</button></div>
+          <div class="acard ahead"><div><h3>Display</h3><p>Pick a preset, then fine-tune it for any game.</p></div><div class="alive">● Live</div><button class="abtn" id="areset">Reset</button></div>
           <div class="acard asplit">
-            <div><div class="arow"><b>Saturation</b><small>100 = the game as it ships</small></div><div class="anum"><span id="asatv">100</span><em>%</em></div><input type="range" id="asat" min="0" max="300" value="100" aria-label="Saturation"></div>
+            <div><div class="arow"><b>Saturation</b><small>100 = untouched</small></div><div class="anum"><span id="asatv">100</span><em>%</em></div><input type="range" id="asat" min="0" max="300" value="100" aria-label="Saturation"></div>
             <div><div class="arow"><b>Vibrance</b><small>50 = normal</small></div><div class="anum"><span id="avibv">50</span><em>%</em></div><input type="range" id="avib" min="0" max="100" value="50" aria-label="Vibrance"></div>
           </div>
           <div class="agrid">
@@ -115,8 +115,8 @@
 
 <section class="band" id="safe">
   <div class="wrap safe">
-    <div class="rv"><div class="kicker">Safe by design</div><h2>It never touches your games.</h2>
-      <p class="sub">Syntra only uses normal Windows features that change what your monitor shows. Every version is built in public, and you can check your copy is official from inside the app.</p>
+    <div class="rv"><div class="kicker">Built clean</div><h2>Your games stay untouched.</h2>
+      <p class="sub">Syntra only uses standard Windows display features to rework the picture. Every version is built in public, and you can check your copy is official from inside the app.</p>
       <div class="cta" style="justify-content:flex-start"><a class="btn" data-link="github" href="#">See the code</a><a class="btn" data-link="releases" href="#">Release notes</a></div></div>
     <div class="list rv" id="safelist"></div>
   </div>

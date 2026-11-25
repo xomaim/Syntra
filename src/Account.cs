@@ -54,9 +54,9 @@ sealed class TermsForm : Form
     static readonly (string Head, string Body)[] Sections =
     {
         ("1. What Syntra is",
-         "Syntra is a Windows app that changes what your monitor shows: colour, saturation, vibrance, gamma, hue, resolution and refresh rate, your monitor's own brightness and contrast, and an on-screen crosshair. By installing, opening or using Syntra you agree to these Terms. If you don't agree, click Decline and don't use it."),
-        ("2. What Syntra never does",
-         "Syntra never reads a game's memory, never changes a game's files, never puts code into a game or into any other program, and installs no driver. It runs as your own Windows user and needs no admin rights. The optional repair button can restart it as admin, and Windows always asks you first."),
+         "Syntra is a Windows app that adjusts the picture your PC sends to your display: colour, saturation, vibrance, gamma, hue, resolution and refresh rate, your monitor's own brightness and contrast, and an on-screen crosshair. By installing, opening or using Syntra you agree to these Terms. If you don't agree, click Decline and don't use it."),
+        ("2. How Syntra keeps your games clean",
+         "Syntra does not look inside running games, does not modify game files, and does not add code to games or to any other program. It installs nothing at system level and runs under your own Windows account. The optional Repair button only gains admin rights after Windows asks you."),
         ("3. Fair play and bans",
          "Every game sets its own rules. Some games don't allow overlays, crosshairs or tools that change how the screen looks. It is your job to check and follow the rules of every game you play. Syntra can't promise that any game allows it, and any warning, suspension or ban is your responsibility."),
         ("4. Your account",
