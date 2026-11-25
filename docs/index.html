@@ -313,7 +313,7 @@ SLIDERS.forEach(k => paint($(k)));
 
 function renderSettings(s) {
   if (!s) return;
-  if (!dragging && !timer) SLIDERS.forEach(k => { if (s[k] !== undefined && +$(k).value !== +s[k]) { $(k).value = s[k]; paint($(k), true); } });
+  if (!dragging && !timer && Date.now() - lastInput > 4000) SLIDERS.forEach(k => { if (s[k] !== undefined && +$(k).value !== +s[k]) { $(k).value = s[k]; paint($(k), true); } });
   $("enabled").classList.toggle("on", s.enabled !== false);
   $("hueOn").classList.toggle("on", !!s.hueOn);
   const names = (s.presets || []).join("|");
@@ -325,6 +325,7 @@ function renderSettings(s) {
 }
 
 // ---- instant link (Supabase Realtime): every slider movement goes straight to the PC ----
+let lastInput = 0;
 let ws = null, wsReady = false, wsDev = null, wsRef = 1, beatT = null, liveBuf = {}, liveT = null;
 function liveConnect() {
   if (!device || (ws && wsDev === device.id)) return;
@@ -348,6 +349,7 @@ function liveSend(changes) {
 
 function queue(k, v) {
   if (!device) return;
+  lastInput = Date.now();
   liveBuf[k] = v;
   if (!liveT) liveT = setTimeout(() => { liveT = null; const c = liveBuf; liveBuf = {}; liveSend(c); }, 30);
   if (k !== "enabled" && !$("enabled").classList.contains("on")) { $("enabled").classList.add("on"); toast("Colours switched on"); }

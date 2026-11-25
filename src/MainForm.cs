@@ -302,9 +302,10 @@ class MainForm : Form
             if (cloudChanged || (DateTime.UtcNow - cloudBeat).TotalSeconds > 25)
             {
                 mine = JsonNode.Parse(RemoteState()) as JsonObject ?? new JsonObject();
-                mine["rev"] = cloudRev + 1; mine["by"] = "pc";
+                mine["rev"] = cloudRev + 1; mine["by"] = "pc"; mine["seen"] = cloudRev; // newest phone change this PC has applied
             }
             var st = await Cloud.Sync(acc, cloudChanged ? mine : null);
+            if (st != null && (string?)st["by"] == "pc") { try { cloudRev = Math.Max(cloudRev, st["rev"]?.GetValue<long>() ?? 0); } catch { } }
             cloudBeat = DateTime.UtcNow;
             // open the instant link once we know this PC's id
             if (acc.DeviceId.Length > 0 && acc.DeviceId != liveDevice)
