@@ -32,7 +32,19 @@ function build(d) {
 
   // hero text
   $("badge").innerHTML = `<b>${esc(d.badge.tag)}</b>${esc(d.badge.text)}`;
-  $("headline").innerHTML = d.hero.lines.map(l => `<span>${esc(l)}</span>`).join("");
+  $("headline").innerHTML = d.hero.lines.map(l => `<span>${esc(l)}</span>`).join("")
+    + `<span class="rot">${(d.hero.rotate || []).map((w, i) => `<b class="${i ? "" : "on"}">${esc(w)}</b>`).join("")}</span>`;
+  $("note").textContent = d.hero.note || "";
+  const rot = [...document.querySelectorAll("#headline .rot b")];
+  if (rot.length > 1 && !reduce) {
+    let i = 0;
+    setInterval(() => {
+      const cur = rot[i]; i = (i + 1) % rot.length; const nxt = rot[i];
+      cur.classList.remove("on"); cur.classList.add("out");
+      nxt.classList.remove("out"); void nxt.offsetWidth; nxt.classList.add("on");
+      setTimeout(() => cur.classList.remove("out"), 800);
+    }, 2600);
+  }
   $("lead").textContent = d.hero.lead;
   $("meta").innerHTML = d.hero.meta.map(esc).join("<i>·</i>");
 

@@ -53,7 +53,7 @@ nav .links a:hover::after { right: 0; }
 
 /* ---------- hero ---------- */
 .hero { position: relative; min-height: 100vh; padding: 140px 0 90px; display: flex; align-items: center; text-align: center; overflow: hidden; isolation: isolate; }
-.hero .bg { position: absolute; inset: -6% -2% 0; z-index: -2; background: url(../img/aurora.jpg) center 35% / cover no-repeat; transform: translateY(var(--py, 0)) scale(1.06); filter: saturate(calc((var(--sat, 1) - 1) * 1.5)) contrast(1.15) brightness(1.15); transition: filter .15s; }
+.hero .bg { position: absolute; inset: -6% -2% 0; z-index: -2; background: url(../img/streaks.jpg) center / cover no-repeat; transform: translateY(var(--py, 0)) scale(1.06); filter: saturate(calc((var(--sat, 1) - 1) * 1.5)) contrast(1.15) brightness(1.15); transition: filter .15s; }
 .hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
   radial-gradient(rgba(255,255,255,.06) 1px, transparent 1.3px) 0 0 / 22px 22px,
   linear-gradient(180deg, rgba(0,0,0,.15) 0%, rgba(0,0,0,.35) 55%, #000 100%); }
@@ -297,3 +297,12 @@ footer a:hover { color: #fff; }
   .rail .track { flex-wrap: wrap; width: auto; transform: none; }
   .words span { color: #fff; }
 }
+
+/* rotating last line of the headline */
+h1.big .rot { position: relative; display: block; height: .98em; overflow: hidden; }
+h1.big .rot b { position: absolute; left: 0; right: 0; font-weight: 400; transform: translateY(105%); opacity: 0; transition: transform .7s cubic-bezier(.7,0,.2,1), opacity .5s; }
+h1.big .rot b.on { transform: none; opacity: 1; }
+h1.big .rot b.out { transform: translateY(-105%); opacity: 0; }
+h1.big .rot b::after { content: ""; position: absolute; left: 50%; bottom: .02em; width: 0; height: 6px; background: #fff; transform: translateX(-50%); transition: width .8s .35s cubic-bezier(.2,.8,.2,1); }
+h1.big .rot b.on::after { width: 60%; }
+.note { color: #bdbdc2; font-size: 14.5px; margin-top: 10px; }

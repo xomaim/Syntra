@@ -5,7 +5,9 @@
   "control": "https://tinyurl.com/2betund3",
   "badge": { "tag": "New", "text": "Control your PC's colours from your phone" },
   "hero": {
-    "lines": ["Push Colour", "To 300%.", "Any Game."],
+    "lines": ["Push More", "Colour Than"],
+    "rotate": ["NVIDIA.", "Your Driver.", "Ever Before."],
+    "note": "NVIDIA's vibrance stops at 100%. Syntra keeps going to 300%.",
     "lead": "Syntra is a Windows colour app for gamers. It changes what your monitor shows — never the game.",
     "meta": ["Free", "no card", "Windows 10 & 11", "nothing else to install"]
   },
