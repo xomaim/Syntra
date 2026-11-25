@@ -81,3 +81,74 @@ static class Cloud
         catch { return null; }
     }
 }
+
+// Live link: the website sends each slider movement over Supabase Realtime (a websocket) and this PC
+// applies it the moment it arrives. The database sync above stays as the backup.
+sealed class LiveLink
+{
+    readonly string channel;
+    readonly Action<JsonObject> onSet;
+    readonly CancellationTokenSource cts = new();
+    public bool Connected { get; private set; }
+
+    public LiveLink(string deviceId, Action<JsonObject> onSet)
+    {
+        channel = "realtime:syntra-" + deviceId;
+        this.onSet = onSet;
+        _ = Run();
+    }
+
+    public void Stop() { try { cts.Cancel(); } catch { } }
+
+    async Task Run()
+    {
+        var url = CloudConfig.Url.Replace("https://", "wss://").TrimEnd('/') + "/realtime/v1/websocket?apikey=" + CloudConfig.AnonKey + "&vsn=1.0.0";
+        int backoff = 1;
+        while (!cts.IsCancellationRequested)
+        {
+            using var ws = new System.Net.WebSockets.ClientWebSocket();
+            try
+            {
+                await ws.ConnectAsync(new Uri(url), cts.Token);
+                int r = 1;
+                async Task Send(string topic, string ev, JsonObject payload)
+                {
+                    var msg = new JsonObject { ["topic"] = topic, ["event"] = ev, ["payload"] = payload, ["ref"] = (r++).ToString() };
+                    var bytes = Encoding.UTF8.GetBytes(msg.ToJsonString());
+                    await ws.SendAsync(bytes, System.Net.WebSockets.WebSocketMessageType.Text, true, cts.Token);
+                }
+                await Send(channel, "phx_join", new JsonObject { ["config"] = new JsonObject { ["broadcast"] = new JsonObject { ["self"] = false }, ["presence"] = new JsonObject { ["key"] = "" } } });
+                Connected = true; backoff = 1;
+                var beat = Task.Run(async () =>
+                {
+                    while (ws.State == System.Net.WebSockets.WebSocketState.Open && !cts.IsCancellationRequested)
+                    {
+                        await Task.Delay(25000, cts.Token);
+                        await Send("phoenix", "heartbeat", new JsonObject());
+                    }
+                });
+                var buf = new byte[64 * 1024];
+                var sb = new StringBuilder();
+                while (ws.State == System.Net.WebSockets.WebSocketState.Open && !cts.IsCancellationRequested)
+                {
+                    var res = await ws.ReceiveAsync(buf, cts.Token);
+                    if (res.MessageType == System.Net.WebSockets.WebSocketMessageType.Close) break;
+                    sb.Append(Encoding.UTF8.GetString(buf, 0, res.Count));
+                    if (!res.EndOfMessage) continue;
+                    var text = sb.ToString(); sb.Clear();
+                    try
+                    {
+                        var j = JsonNode.Parse(text);
+                        if ((string?)j?["event"] == "broadcast" && (string?)j?["payload"]?["event"] == "set" && j?["payload"]?["payload"] is JsonObject changes)
+                            onSet((JsonObject)changes.DeepClone());
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            Connected = false;
+            try { await Task.Delay(TimeSpan.FromSeconds(backoff), cts.Token); } catch { break; }
+            backoff = Math.Min(backoff * 2, 30);
+        }
+    }
+}

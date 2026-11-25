@@ -29,7 +29,9 @@ class MainForm : Form
     bool dirty, remoteDirty, cloudChanged = true, cloudBusy, cloudApplying;
     long cloudRev;
     DateTime cloudBeat;
-    readonly System.Windows.Forms.Timer cloudTimer = new() { Interval = 1500 };
+    readonly System.Windows.Forms.Timer cloudTimer = new() { Interval = 1000 };
+    LiveLink? live;
+    string liveDevice = "";
     DateTime lastRemoteRefresh;
     RemoteServer? remote;
     string remoteError = "";
@@ -304,6 +306,19 @@ class MainForm : Form
             }
             var st = await Cloud.Sync(acc, cloudChanged ? mine : null);
             cloudBeat = DateTime.UtcNow;
+            // open the instant link once we know this PC's id
+            if (acc.DeviceId.Length > 0 && acc.DeviceId != liveDevice)
+            {
+                live?.Stop();
+                liveDevice = acc.DeviceId;
+                live = new LiveLink(liveDevice, changes => BeginInvoke(() =>
+                {
+                    cloudApplying = true;
+                    try { RemoteSet(changes.ToJsonString()); } finally { cloudApplying = false; }
+                    dirty = false; ApplyNow();          // apply right now, don't wait for the next timer tick
+                    cloudChanged = true;
+                }));
+            }
             if (st == null) return;
             long rev = 0;
             try { rev = st["rev"]?.GetValue<long>() ?? 0; } catch { }
@@ -392,6 +407,7 @@ class MainForm : Form
         watch.Stop(); updateTimer.Stop(); applyTimer.Stop();
         remote?.Stop();
         cloudTimer.Stop();
+        live?.Stop();
         try { Native.UnregisterHotKey(Handle, HotkeyId); } catch { }
         overlay?.Close();
         hueOverlay?.Close();

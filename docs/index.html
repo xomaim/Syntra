@@ -324,17 +324,41 @@ function renderSettings(s) {
   }
 }
 
+// ---- instant link (Supabase Realtime): every slider movement goes straight to the PC ----
+let ws = null, wsReady = false, wsDev = null, wsRef = 1, beatT = null, liveBuf = {}, liveT = null;
+function liveConnect() {
+  if (!device || (ws && wsDev === device.id)) return;
+  try { ws && ws.close(); } catch (e) {}
+  wsDev = device.id; wsReady = false;
+  const topic = "realtime:syntra-" + wsDev;
+  const sock = new WebSocket(API.replace("https://", "wss://").replace("/rest/v1/rpc/", "/realtime/v1/websocket") + "?apikey=" + KEY + "&vsn=1.0.0");
+  ws = sock;
+  sock.onopen = () => {
+    sock.send(JSON.stringify({ topic, event: "phx_join", payload: { config: { broadcast: { self: false }, presence: { key: "" } } }, ref: String(wsRef++) }));
+    clearInterval(beatT);
+    beatT = setInterval(() => { try { sock.send(JSON.stringify({ topic: "phoenix", event: "heartbeat", payload: {}, ref: String(wsRef++) })); } catch (e) {} }, 25000);
+  };
+  sock.onmessage = e => { try { const m = JSON.parse(e.data); if (m.event === "phx_reply" && m.topic === topic && m.payload && m.payload.status === "ok") wsReady = true; } catch (x) {} };
+  sock.onclose = () => { if (ws !== sock) return; wsReady = false; clearInterval(beatT); ws = null; setTimeout(liveConnect, 1500); };
+}
+function liveSend(changes) {
+  if (!wsReady || !ws) return;
+  try { ws.send(JSON.stringify({ topic: "realtime:syntra-" + wsDev, event: "broadcast", payload: { type: "broadcast", event: "set", payload: changes }, ref: String(wsRef++) })); } catch (e) {}
+}
+
 function queue(k, v) {
   if (!device) return;
+  liveBuf[k] = v;
+  if (!liveT) liveT = setTimeout(() => { liveT = null; const c = liveBuf; liveBuf = {}; liveSend(c); }, 30);
   if (k !== "enabled" && !$("enabled").classList.contains("on")) { $("enabled").classList.add("on"); toast("Colours switched on"); }
-  pending[k] = v; if (!timer) timer = setTimeout(send, 120); }
+  pending[k] = v; if (!timer) timer = setTimeout(send, 350); }
 async function send() {
   const changes = pending; pending = {};
   try {
     const r = await call("syntra_web_set", { p_token: token, p_device: device.id, p_changes: changes });
     if (r && r.settings) device.settings = r.settings;
   } catch (e) { toast(e.message); if (/Signed out/i.test(e.message)) signOut(); }
-  timer = Object.keys(pending).length ? setTimeout(send, 120) : null;
+  timer = Object.keys(pending).length ? setTimeout(send, 350) : null;
 }
 SLIDERS.forEach(k => {
   const el = $(k);
@@ -377,7 +401,7 @@ async function refresh() {
     device = (device && ds.find(d => d.id === device.id)) || ds[0] || null;
     $("nopc").classList.toggle("hide", !!device);
     $("controls").classList.toggle("hide", !device);
-    if (device) renderSettings(device.settings);
+    if (device) { renderSettings(device.settings); liveConnect(); }
     $("live").textContent = device ? (device.online ? "● Live" : "● Offline") : "● No PC";
     $("live").classList.toggle("on", !!(device && device.online));
     $("sub").textContent = device ? `${device.name || "PC"} · ${device.online ? "online" : "seen " + ago(device.last_seen)}` : "No PC linked yet";
