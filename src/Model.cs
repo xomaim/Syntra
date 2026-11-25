@@ -49,6 +49,27 @@ public class CrosshairSettings
     public int Argb { get; set; } = unchecked((int)0xFF00FF66);
     public bool Outline { get; set; } = true;
     public bool CenterDot { get; set; }
+    public int OutlineArgb { get; set; } = unchecked((int)0xFF000000);
+    public int OutlineWidth { get; set; } = 1;
+
+    public CrosshairSettings Copy() => (CrosshairSettings)MemberwiseClone();
+
+    // Ready-made crosshairs. Drawn by Syntra, so they have no background — only the lines and their outline.
+    public static List<(string Name, CrosshairSettings S)> Presets() => new()
+    {
+        ("GTA PvP", new() { Style = "Cross", Size = 4, Thickness = 2, Gap = 0, Argb = unchecked((int)0xFFFFFFFF), Outline = true, OutlineArgb = unchecked((int)0xFF000000), OutlineWidth = 2 }),
+        ("Black + white edge", new() { Style = "Cross", Size = 4, Thickness = 2, Gap = 0, Argb = unchecked((int)0xFF000000), Outline = true, OutlineArgb = unchecked((int)0xFFFFFFFF), OutlineWidth = 2 }),
+        ("Classic green", new() { Style = "Cross", Size = 10, Thickness = 2, Gap = 3, Argb = unchecked((int)0xFF00FF66), Outline = true, OutlineWidth = 1 }),
+        ("Small dot", new() { Style = "Dot", Size = 4, Thickness = 2, Gap = 0, Argb = unchecked((int)0xFFFF3B3B), Outline = true, OutlineWidth = 1 }),
+        ("Cyan T", new() { Style = "T", Size = 8, Thickness = 2, Gap = 3, Argb = unchecked((int)0xFF00FFFF), Outline = true, OutlineWidth = 1 }),
+        ("Circle", new() { Style = "Circle", Size = 9, Thickness = 2, Gap = 0, Argb = unchecked((int)0xFFFFFFFF), Outline = true, OutlineWidth = 1, CenterDot = true }),
+    };
+
+    public void CopyFrom(CrosshairSettings o)
+    {
+        Style = o.Style; Size = o.Size; Thickness = o.Thickness; Gap = o.Gap; Argb = o.Argb;
+        Outline = o.Outline; CenterDot = o.CenterDot; OutlineArgb = o.OutlineArgb; OutlineWidth = o.OutlineWidth;
+    }
 }
 
 public class AppSettings

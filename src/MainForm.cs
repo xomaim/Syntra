@@ -756,8 +756,18 @@ class MainForm : Form
         card.Controls.Add(controls);
         page.Controls.Add(card);
 
+        var presets = Ui.Card("Presets", "Tap one to use it. You can still change it with the sliders.");
+        foreach (var (pname, pset) in CrosshairSettings.Presets())
+        {
+            var ps = pset;
+            var tile = new CrosshairTile(pname, ps);
+            tile.Click += (_, _) => { c.CopyFrom(ps); S.Save(); Show("Crosshair"); };
+            presets.Controls.Add(tile);
+        }
+        page.Controls.Add(presets);
+
         var extra = Ui.Card("Colour");
-        foreach (var col in new[] { Color.FromArgb(0, 255, 102), Color.Red, Color.Cyan, Color.Yellow, Color.Magenta, Color.White })
+        foreach (var col in new[] { Color.FromArgb(0, 255, 102), Color.Red, Color.Cyan, Color.Yellow, Color.Magenta, Color.White, Color.Black })
         {
             var cc = col;
             var b = new Swatch(cc, c.Argb == cc.ToArgb());
@@ -769,11 +779,55 @@ class MainForm : Form
             using var d = new ColorDialog { Color = Color.FromArgb(c.Argb), FullOpen = true };
             if (d.ShowDialog(this) == DialogResult.OK) { c.Argb = Color.FromArgb(255, d.Color).ToArgb(); S.Save(); Show("Crosshair"); }
         }));
-        extra.Controls.Add(Ui.Toggle("Black outline", c.Outline, v => { c.Outline = v; Redraw(); S.Save(); }));
+        extra.Controls.Add(Ui.Toggle("Outline", c.Outline, v => { c.Outline = v; Redraw(); S.Save(); }));
+        bool whiteEdge = Color.FromArgb(c.OutlineArgb).GetBrightness() > 0.5f;
+        extra.Controls.Add(Ui.Toggle("White outline", whiteEdge, v => { c.OutlineArgb = (v ? Color.White : Color.Black).ToArgb(); Redraw(); S.Save(); }));
+        var ow = new DarkSlider("Outline thickness", 1, 4, c.OutlineWidth, 1, 260);
+        ow.Changed += v => { c.OutlineWidth = (int)v; Redraw(); };
+        ow.Released += () => S.Save();
+        extra.Controls.Add(ow);
         extra.Controls.Add(Ui.Toggle("Centre dot", c.CenterDot, v => { c.CenterDot = v; Redraw(); S.Save(); }));
         page.Controls.Add(extra);
         overlay?.Invalidate();
         return page;
+    }
+
+    // Preset tile: the crosshair on a see-through checkerboard, with its name.
+    sealed class CrosshairTile : Control
+    {
+        readonly string name; readonly CrosshairSettings s; bool hover;
+        public CrosshairTile(string n, CrosshairSettings settings)
+        {
+            name = n; s = settings;
+            Size = new Size(132, 112); Margin = new Padding(4); Cursor = Cursors.Hand;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+        protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(Theme.Card);
+            var box = new RectangleF(0.5f, 0.5f, Width - 1.5f, 80);
+            using (var clip = Gfx.Round(box, 10))
+            {
+                g.SetClip(clip);
+                const int sq = 10;
+                using var a = new SolidBrush(Color.FromArgb(58, 60, 66));
+                using var b2 = new SolidBrush(Color.FromArgb(44, 46, 51));
+                for (int y = 0; y < 82; y += sq)
+                    for (int x = 0; x < Width; x += sq)
+                        g.FillRectangle(((x / sq + y / sq) & 1) == 0 ? a : b2, x, y, sq, sq);
+                g.ResetClip();
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                using var p = new Pen(hover ? Theme.Accent : Theme.Border, hover ? 2 : 1);
+                g.DrawPath(p, clip);
+            }
+            CrosshairArt.Draw(g, s, Width / 2, 41);
+            TextRenderer.DrawText(g, name, Theme.Body, new Rectangle(0, 84, Width, 26), Theme.Text,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
     }
 
     // Round colour dot button.

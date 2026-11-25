@@ -821,7 +821,7 @@ static class CrosshairArt
                 rects.Add(new Rectangle(c - t - 1, cy - t - 1, t * 2 + 2, t * 2 + 2));
                 break;
             case "Circle":
-                if (s.Outline) using (var op = new Pen(Color.Black, t + 2)) g.DrawEllipse(op, c - len, cy - len, len * 2, len * 2);
+                if (s.Outline) using (var op = new Pen(Color.FromArgb(s.OutlineArgb), t + 2 * Math.Max(1, s.OutlineWidth))) g.DrawEllipse(op, c - len, cy - len, len * 2, len * 2);
                 using (var p = new Pen(col, t)) g.DrawEllipse(p, c - len, cy - len, len * 2, len * 2);
                 break;
             case "T":
@@ -839,8 +839,9 @@ static class CrosshairArt
         if (s.CenterDot && s.Style != "Dot") rects.Add(new Rectangle(c - half, cy - half, t, t));
         if (s.Outline)
         {
-            using var ob = new SolidBrush(Color.Black);
-            foreach (var r in rects) g.FillRectangle(ob, Rectangle.Inflate(r, 1, 1));
+            int ow = Math.Max(1, s.OutlineWidth);
+            using var ob = new SolidBrush(Color.FromArgb(s.OutlineArgb));
+            foreach (var r in rects) g.FillRectangle(ob, Rectangle.Inflate(r, ow, ow));
         }
         using var br = new SolidBrush(col);
         foreach (var r in rects) g.FillRectangle(br, r);
