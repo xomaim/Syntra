@@ -33,9 +33,10 @@ button{font:inherit;cursor:pointer}
 .err{color:#e5484d;min-height:20px;margin-top:10px;font-size:14px}
 .foot{color:#aaa;font-size:12px;margin-top:22px;letter-spacing:.4px}
 #intro{position:fixed;inset:0;background:#fff;display:none;align-items:center;justify-content:center;z-index:9;overflow:hidden}
-#intro .logo{animation:zoom 1.8s cubic-bezier(.7,0,.2,1) forwards}
+#intro{transition:background .7s ease}
+#intro .logo{animation:zoom 1.6s cubic-bezier(.6,0,.3,1) forwards;will-change:transform,opacity}
 #intro.black{background:#000}
-@keyframes zoom{0%{transform:scale(.4);opacity:0}25%{transform:scale(1);opacity:1}45%{transform:scale(1) rotate(0)}100%{transform:scale(90) rotate(-8deg)}}
+@keyframes zoom{0%{transform:scale(.6);opacity:0}25%{transform:scale(1);opacity:1}50%{transform:scale(1);opacity:1}100%{transform:scale(3.2);opacity:0;filter:blur(6px)}}
 #intro.out{animation:fade .45s forwards}
 @keyframes fade{to{opacity:0;visibility:hidden}}
 @media (prefers-reduced-motion:reduce){#intro .logo{animation:none}}
@@ -276,14 +277,14 @@ $("lf").addEventListener("submit", async e => {
 function intro() {
   $("login").style.display = "none";
   const el = $("intro"); el.style.display = "flex";
-  setTimeout(() => el.classList.add("black"), 1700);  // the S now fills the whole screen
+  setTimeout(() => el.classList.add("black"), 800);   // white fades to black while the S grows and fades out
   setTimeout(() => {
     document.body.classList.add("dark");
     $("home").style.display = "block";
     document.querySelectorAll("#home .top, #home .tabs, #deck > .card, #dots, #home > .btn, #home .note").forEach((el, i) => { el.classList.add("anim"); el.style.animationDelay = (0.08 * i + 0.05) + "s"; });
     requestAnimationFrame(() => { $("home").classList.add("show"); moveInk(); });
     el.classList.add("out"); setTimeout(() => el.style.display = "none", 600);
-  }, 1850);
+  }, 1600);
   refresh();
 }
 
