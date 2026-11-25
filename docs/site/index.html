@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Syntra · Pixy Studios</title>
+<meta name="description" content="Syntra makes your games pop: saturation up to 300%, vibrance, hue, crosshairs, resolution and phone control, without touching the game.">
+<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Syntra · Push colour to 300%">
+<meta property="og:description" content="A Windows colour app for gamers. It changes what your monitor shows — never the game.">
+<meta property="og:image" content="img/valley.jpg">
+<link rel="icon" href="img/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="spot" aria-hidden="true"></div>
+
+<nav id="nav">
+  <div class="bar">
+    <a class="brand" href="#top"><img src="img/logo.png" alt="">Syntra</a>
+    <div class="links"><a href="#compare">See it</a><a href="#app">Try it</a><a href="#features">Features</a><a href="#phone">Phone</a><a href="#faq">FAQ</a></div>
+    <a class="btn white sm" data-link="download" href="#">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7.5-1v7H3zM11.5 4.3L21 3v8.5h-9.5zM3 12.5h7.5v7L3 18.5zM11.5 12.5H21V21l-9.5-1.3z"/></svg>Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="badge" href="#phone" id="badge"></a>
+    <h1 class="big" id="headline"></h1>
+    <div class="rainbow">
+      <input type="range" id="hsat" min="0" max="300" value="100" aria-label="Try the saturation">
+      <div class="scale"><span>0</span><span class="mid">100 · as it ships</span><span>300%</span></div>
+      <div class="satnum" id="hsatv"></div>
+    </div>
+    <p class="lead" id="lead"></p>
+    <div class="cta">
+      <a class="btn go" data-link="download" href="#">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+        Download for Windows</a>
+      <a class="btn pill" href="#app">Try it right here<small>Working copy below</small></a>
+    </div>
+    <p class="meta" id="meta"></p>
+  </div>
+  <div class="scrollhint" aria-hidden="true"></div>
+</header>
+
+<div class="marquee" aria-hidden="true"><div class="track" id="marquee"></div></div>
+
+<section class="band" id="compare">
+  <div class="wrap center">
+    <div class="rv"><div class="kicker">See the difference</div><h2>Drag to see Syntra on.</h2>
+      <p class="sub">Left is the game as it ships. Right is with Syntra. Pick a preset or move the split.</p></div>
+    <div class="compare rv" id="cmp">
+      <img class="before" src="img/valley.jpg" alt="A sunset valley, normal colours" draggable="false">
+      <img class="after" src="img/valley.jpg" alt="" draggable="false">
+      <span class="tag l">As it ships</span><span class="tag r" id="cmptag">Syntra · 221%</span>
+      <div class="handle"></div>
+    </div>
+    <div class="presets" id="presets"></div>
+    <div class="stats" id="stats"></div>
+  </div>
+</section>
+
+<section class="band" id="app">
+  <div class="wrap">
+    <div class="center rv"><div class="kicker">Try it</div><h2>The real app, in your browser.</h2>
+      <p class="sub">Move the sliders. Nothing on your PC changes — this is a working copy.</p></div>
+    <div class="appwin rv" id="appwin">
+      <div class="atitle"><img src="img/logo.png" alt="">Syntra<span class="sp"></span><i></i><i></i><i></i></div>
+      <div class="abody">
+        <aside class="aside" id="aside"></aside>
+        <div class="amain">
+          <div class="acard ahead"><div><h3>Display</h3><p>Presets are starting points. The sliders work in whatever you play.</p></div><div class="alive">● Live</div><button class="abtn" id="areset">Reset</button></div>
+          <div class="acard asplit">
+            <div><div class="arow"><b>Saturation</b><small>100 = the game as it ships</small></div><div class="anum"><span id="asatv">100</span><em>%</em></div><input type="range" id="asat" min="0" max="300" value="100" aria-label="Saturation"></div>
+            <div><div class="arow"><b>Vibrance</b><small>50 = normal</small></div><div class="anum"><span id="avibv">50</span><em>%</em></div><input type="range" id="avib" min="0" max="100" value="50" aria-label="Vibrance"></div>
+          </div>
+          <div class="agrid">
+            <div class="acard"><div class="arow"><b>Preview</b><small>what your game will look like</small></div>
+              <div class="ashot"><img id="ashot" src="img/valley.jpg" alt="Preview of the game scene"><div class="xh"></div></div>
+              <div class="fine" id="afine"></div></div>
+            <div class="acard"><div class="arow"><b>Presets</b><small>tap one</small></div><div class="ptiles" id="ptiles"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="features">
+  <div class="wrap">
+    <div class="center rv"><div class="kicker">Features</div><h2>Everything for how your game looks.</h2></div>
+    <div class="grid" id="grid"></div>
+  </div>
+</section>
+
+<section class="band" id="safe">
+  <div class="wrap safe">
+    <div class="rv"><div class="kicker">Safe by design</div><h2>It never touches your games.</h2>
+      <p class="sub">Syntra only uses normal Windows features that change what your monitor shows. Every version is built in public, and you can check your copy is official from inside the app.</p>
+      <div class="cta" style="justify-content:flex-start"><a class="btn" data-link="github" href="#">See the code</a><a class="btn" data-link="releases" href="#">Release notes</a></div></div>
+    <div class="list rv" id="safelist"></div>
+  </div>
+</section>
+
+<section class="band city" id="phone">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="wrap phonewrap">
+    <div class="rv"><div class="kicker">Phone control</div><h2>Your phone is the remote.</h2>
+      <p class="sub">Drag a slider on your phone and your PC screen follows instantly — on any Wi-Fi or mobile data.</p>
+      <ol class="steps" id="steps"></ol></div>
+    <div class="phone rv" aria-hidden="true">
+      <div class="ph-top"><img src="img/logo.png" alt="">Syntra<small>● Live</small></div>
+      <div class="ph-card"><span>Saturation</span><b id="phv">100%</b><div class="ph-bar" id="phbar"><i></i></div></div>
+      <div class="ph-card"><div class="ph-row"><span>Colours on</span><div class="ph-tg"></div></div></div>
+      <div class="ph-shot"><img id="phshot" src="img/valley-thumb.jpg" alt=""></div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="faq">
+  <div class="wrap center">
+    <div class="rv"><div class="kicker">FAQ</div><h2>Questions</h2></div>
+    <div class="faq" id="faqlist"></div>
+  </div>
+</section>
+
+<section class="band dl">
+  <div class="bg" aria-hidden="true"></div>
+  <div class="wrap rv">
+    <img class="logo" src="img/logo.png" alt="Syntra">
+    <h2>Ready when you are.</h2>
+    <p class="sub">Download one file, accept the terms, make an account. Syntra adds a shortcut and keeps itself up to date.</p>
+    <div class="cta"><a class="btn go" data-link="download" href="#">Download Syntra.exe</a></div>
+    <p class="meta">If Windows says it protected your PC, click <b>More info → Run anyway</b>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="img/logo.png" alt="">Syntra</a>
+    <span>by Pixy Studios</span>
+    <span class="sp"></span>
+    <a data-link="github" href="#">GitHub</a>
+    <a href="#faq">FAQ</a>
+    <span>© 2026 Pixy Studios</span>
+  </div>
+</footer>
+
+<script src="js/main.js"></script>
+</body>
+</html>
